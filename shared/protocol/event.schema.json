@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "EventType": {
+      "description": "Catalogo de eventos del bus.\n\nLos valores usan espacios de nombres separados por punto para que las\nsuscripciones por patron glob sean utiles: `voice.*` recibe todo lo del\npipeline de voz, `*.error` recibe todos los fallos.\n\nDECISION: este catalogo cubre lo que la Fase 0 emite mas los eventos que el\ndocumento maestro nombra explicitamente. Las fases siguientes agregan\nmiembros aqui; nadie publica un tipo que no este en esta lista.",
+      "enum": [
+        "core.state.changed",
+        "core.started",
+        "core.stopping",
+        "core.error",
+        "trace.span",
+        "bus.metrics",
+        "bus.consumer.lagging",
+        "config.reloaded",
+        "voice.wake.detected",
+        "voice.level",
+        "voice.speech.started",
+        "voice.speech.ended",
+        "voice.stt.partial",
+        "voice.stt.final",
+        "voice.tts.started",
+        "voice.tts.amplitude",
+        "voice.tts.finished",
+        "voice.barge_in",
+        "cognition.intent.classified",
+        "cognition.routed",
+        "cognition.response",
+        "memory.record.stored",
+        "memory.consolidation.finished",
+        "tool.call.started",
+        "tool.call.finished",
+        "guardian.audit.entry",
+        "guardian.confirmation.required",
+        "guardian.killswitch"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "JsonValue": {}
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Un mensaje publicado en el bus.\n\nDECISION: `payload` es un diccionario serializable y no un modelo generico\n`Event[T]`. Dos razones concretas. Primera, este mismo sobre cruza el\nWebSocket hacia el HUD (Electron) y la app movil (React Native), y un\ngenerico de Pydantic produce un esquema JSON con referencias anidadas que\nlos generadores de tipos de TypeScript manejan mal. Segunda, el bus reparte\neventos de tipos heterogeneos por el mismo canal; tiparlo con un generico\nobliga a `Event[Any]` en la firma del bus y la ventaja teorica se pierde\nigual.\n\nA cambio, los consumidores recuperan el tipo con `payload_as(Contrato)`, que\nvalida de verdad en vez de confiar.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Interaccion a la que pertenece. None en eventos de sistema.",
+      "title": "Correlation Id"
+    },
+    "event_id": {
+      "description": "Identificador unico de este evento.",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Carga util ya serializada.",
+      "title": "Payload",
+      "type": "object"
+    },
+    "source": {
+      "description": "Modulo que lo publico: voice.wake, cognition.router, bus...",
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Cuando se publico.",
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "type": {
+      "$ref": "#/$defs/EventType",
+      "description": "Tipo del evento. Su valor con puntos permite suscripcion por glob."
+    }
+  },
+  "required": [
+    "type",
+    "source"
+  ],
+  "title": "Event",
+  "type": "object"
+}

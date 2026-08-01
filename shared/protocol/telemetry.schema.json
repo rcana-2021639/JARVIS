@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Foto instantanea de la salud de la maquina y del propio Jarvis.\n\nAlimenta el panel de telemetria del HUD (Fase 5), que exige datos reales y\nno simulados. Los campos opcionales son los que no toda maquina expone: en\nuna maquina sin GPU dedicada, `vram_used_mb` y `gpu_percent` son None y el\nHUD debe ocultar esos medidores en vez de dibujar ceros.",
+  "properties": {
+    "captured_at": {
+      "description": "Cuando se tomo la medicion.",
+      "format": "date-time",
+      "title": "Captured At",
+      "type": "string"
+    },
+    "cpu_per_core": {
+      "description": "Uso por nucleo. El HUD lo dibuja como ecualizador vertical.",
+      "items": {
+        "type": "number"
+      },
+      "title": "Cpu Per Core",
+      "type": "array"
+    },
+    "cpu_percent": {
+      "description": "Uso total de CPU.",
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Cpu Percent",
+      "type": "number"
+    },
+    "disk_free_gb": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Espacio libre en el disco principal.",
+      "title": "Disk Free Gb"
+    },
+    "gpu_percent": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Uso de GPU. None si no se puede medir.",
+      "title": "Gpu Percent"
+    },
+    "net_down_kbps": {
+      "default": 0.0,
+      "description": "Bajada actual.",
+      "minimum": 0.0,
+      "title": "Net Down Kbps",
+      "type": "number"
+    },
+    "net_up_kbps": {
+      "default": 0.0,
+      "description": "Subida actual.",
+      "minimum": 0.0,
+      "title": "Net Up Kbps",
+      "type": "number"
+    },
+    "ram_total_mb": {
+      "description": "RAM total de la maquina.",
+      "exclusiveMinimum": 0.0,
+      "title": "Ram Total Mb",
+      "type": "number"
+    },
+    "ram_used_mb": {
+      "description": "RAM en uso, en megabytes.",
+      "minimum": 0.0,
+      "title": "Ram Used Mb",
+      "type": "number"
+    },
+    "temperature_c": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Temperatura del paquete de CPU, si el sistema la expone.",
+      "title": "Temperature C"
+    },
+    "vram_total_mb": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "VRAM total. None si no hay GPU dedicada.",
+      "title": "Vram Total Mb"
+    },
+    "vram_used_mb": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "VRAM en uso. None si no hay GPU dedicada.",
+      "title": "Vram Used Mb"
+    }
+  },
+  "required": [
+    "cpu_percent",
+    "ram_used_mb",
+    "ram_total_mb"
+  ],
+  "title": "Telemetry",
+  "type": "object"
+}

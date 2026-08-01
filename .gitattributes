@@ -1,0 +1,15 @@
+# Normaliza los finales de linea. Sin esto, un archivo tocado en Windows y otro
+# en Linux producen diffs enteros de ruido -- y este monorepo va a tener Python,
+# TypeScript (HUD) y React Native (movil) conviviendo.
+* text=auto eol=lf
+
+# Binarios: que git no los toque nunca.
+*.png binary
+*.jpg binary
+*.ico binary
+*.gguf binary
+*.onnx binary
+*.wav binary
+*.mp3 binary
+*.woff binary
+*.woff2 binary

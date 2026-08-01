@@ -1,0 +1,126 @@
+# =============================================================================
+# CONFIGURACION PRINCIPAL DEL PROYECTO JARVIS
+# =============================================================================
+# Este archivo se relee solo. Cambiar un valor aqui se refleja en el nucleo sin
+# reiniciar nada. Si lo dejas mal escrito, Jarvis conserva la configuracion
+# anterior y avisa en el registro en vez de caerse.
+#
+# Jerarquia: valores por defecto  ->  este archivo  ->  variables de entorno.
+# Para sobreescribir sin tocar el archivo:  JARVIS_VOICE__WAKE_THRESHOLD=0.7
+#
+# Los valores de aqui son los defaults documentados en core/jarvis/config.py.
+# Solo hace falta escribir lo que quieras cambiar.
+# =============================================================================
+
+user_name = "Rhandy"
+log_level = "INFO"
+development = true
+log_file = "logs/jarvis.log"
+
+# -----------------------------------------------------------------------------
+# VOZ
+# -----------------------------------------------------------------------------
+[voice]
+# input_device = "Microfono (Realtek)"   # None usa el dispositivo por defecto
+sample_rate = 16000
+ring_buffer_seconds = 3.0
+
+wake_word = "jarvis"
+wake_threshold = 0.5          # subelo si hay falsos positivos, bajalo si no dispara
+wake_cooldown_s = 1.5
+wake_preroll_ms = 500         # audio previo al disparo que se conserva
+
+vad_silence_ms = 700          # silencio que marca el fin de una frase
+max_listen_s = 30.0
+
+stt_engine = "local"
+# ESTA MAQUINA NO TIENE GPU DEDICADA (Intel UHD 630, 16GB RAM).
+# 'small' es lo que corre en CPU con latencia tolerable. Con GPU dedicada,
+# subir a "large-v3-turbo". Ver la nota de hardware en ESTADO.md.
+stt_model = "small"
+
+tts_engine = "local"
+tts_voice = "es_MX-claude-high"
+barge_in_enabled = true
+
+# -----------------------------------------------------------------------------
+# COGNICION -- la cascada de tres niveles
+# -----------------------------------------------------------------------------
+[cognition]
+privacy_mode = "HYBRID"       # HYBRID | LOCAL_ONLY | CLOUD_PREFERRED
+
+# Sin GPU dedicada, la tabla de VRAM del documento maestro manda Qwen3 4B en CPU
+# con escalado agresivo a la nube.
+local_model = "qwen3:4b"
+local_confidence_threshold = 0.7   # debajo de esto, escala al nivel 3
+
+cloud_model_light = "claude-haiku-4-5-20251001"
+cloud_model_standard = "claude-sonnet-5"
+cloud_model_deep = "claude-opus-5"
+
+# Tope diario. Al alcanzarlo Jarvis avisa por voz y degrada a solo-local en vez
+# de seguir cobrando. 0.50/dia son unos 15 al mes; el documento sugeria 10.
+daily_budget_usd = 0.50
+
+max_context_tokens = 8000     # mas contexto que esto, escala al nivel 3
+max_chained_steps = 3         # mas pasos que esto, escala al nivel 3
+classifier_timeout_ms = 10
+max_tool_iterations = 8
+
+# -----------------------------------------------------------------------------
+# MEMORIA -- las cinco capas
+# -----------------------------------------------------------------------------
+[memory]
+data_dir = "config/data"
+embedding_model = "bge-m3"
+working_turns = 20
+retrieval_budget_tokens = 1500
+retrieval_timeout_ms = 100    # objetivo duro de la recuperacion hibrida
+consolidation_hour = 4        # hora local de la consolidacion nocturna
+decay_half_life_days = 30.0
+routine_promotion_threshold = 3
+episodic_compression_days = 90
+
+# -----------------------------------------------------------------------------
+# HERRAMIENTAS -- servidores MCP
+# -----------------------------------------------------------------------------
+[tools]
+enabled_servers = ["system", "files", "apps", "windows", "media"]
+default_timeout_s = 30.0
+parallel_calls = true
+trash_retention_hours = 48    # red de seguridad para lo que Jarvis borra
+screenshot_retention_minutes = 10
+restart_backoff_s = 1.0
+
+# -----------------------------------------------------------------------------
+# GUARDIAN -- permisos, confirmaciones, boveda y auditoria
+# -----------------------------------------------------------------------------
+[guardian]
+policy_file = "config/policy.toml"
+confirmation_timeout_s = 15.0   # sin respuesta, una accion ROJA se cancela
+undo_stack_size = 20
+undo_window_s = 10.0
+vault_autolock_minutes = 30
+audit_retention_days = 365
+
+# -----------------------------------------------------------------------------
+# PUENTE REMOTO -- se activa en la Fase 9
+# -----------------------------------------------------------------------------
+[bridge]
+enabled = false
+# REGLA DURA: en produccion esto va a la interfaz de Tailscale, NUNCA a 0.0.0.0.
+host = "127.0.0.1"
+port = 8765
+heartbeat_s = 15.0
+max_clients = 5
+
+# -----------------------------------------------------------------------------
+# INTERFAZ -- el HUD
+# -----------------------------------------------------------------------------
+[ui]
+layout = "full"               # full | compact | hidden
+always_on_top = true
+show_fps = false
+particle_count = 30000        # el nivel de detalle adaptativo lo baja solo
+ui_sounds = true
+target_fps = 60

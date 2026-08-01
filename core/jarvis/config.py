@@ -1,0 +1,427 @@
+"""Configuracion del nucleo, con jerarquia y recarga en caliente.
+
+La jerarquia, de menor a mayor prioridad:
+
+    1. Los valores por defecto que declara cada seccion en este archivo
+    2. `config/jarvis.toml`
+    3. Variables de entorno con prefijo `JARVIS_`
+
+El orden importa: los defaults hacen que el sistema arranque sin configurar
+nada, el TOML es lo que el usuario edita a diario, y las variables de entorno
+existen para ajustes puntuales sin tocar archivos (util en pruebas y al
+empaquetar en la Fase 11).
+
+Para secciones anidadas, la variable de entorno usa doble guion bajo:
+`JARVIS_VOICE__WAKE_THRESHOLD=0.7`.
+
+DECISION: cero valores magicos incrustados en el codigo. Si un numero gobierna
+un comportamiento -- un umbral, un tiempo limite, un tamano de buffer -- vive
+aqui y no en el modulo que lo usa. Es la unica forma de afinar el sistema sin
+recompilar nada.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
+
+from jarvis.contracts.enums import PrivacyMode
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+__all__ = [
+    "BridgeConfig",
+    "CognitionConfig",
+    "GuardianConfig",
+    "JarvisConfig",
+    "MemoryConfig",
+    "ToolsConfig",
+    "UIConfig",
+    "VoiceConfig",
+    "default_config_path",
+    "load_config",
+    "project_root",
+]
+
+
+def project_root() -> Path:
+    """Raiz del monorepo, deducida desde la ubicacion de este archivo."""
+    return Path(__file__).resolve().parents[2]
+
+
+def default_config_path() -> Path:
+    """Ruta por defecto de `config/jarvis.toml`."""
+    return project_root() / "config" / "jarvis.toml"
+
+
+#: Ruta del TOML que leera la proxima construccion de `JarvisConfig`.
+#: DECISION: es un global de modulo porque `settings_customise_sources` es un
+#: classmethod al que pydantic-settings no deja pasarle argumentos propios.
+#: Siempre se fija desde `load_config`, nunca a mano.
+_toml_path: Path = default_config_path()
+
+
+class _Section(BaseModel):
+    """Base de las secciones de configuracion."""
+
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+
+class VoiceConfig(_Section):
+    """Pipeline de voz: captura, palabra clave, transcripcion y sintesis."""
+
+    input_device: str | None = Field(
+        default=None,
+        description="Nombre del microfono. None usa el dispositivo por defecto del sistema.",
+    )
+    sample_rate: int = Field(default=16000, gt=0, description="Frecuencia de muestreo en Hz.")
+    ring_buffer_seconds: float = Field(
+        default=3.0,
+        gt=0,
+        description=(
+            "Segundos del buffer circular previo a la palabra clave. Vive en RAM "
+            "y se sobrescribe solo: jamas toca disco."
+        ),
+    )
+    wake_word: str = Field(default="jarvis", min_length=1, description="Palabra de activacion.")
+    wake_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Umbral de confianza del detector. Subirlo reduce falsos positivos.",
+    )
+    wake_cooldown_s: float = Field(
+        default=1.5,
+        ge=0.0,
+        description="Enfriamiento tras un disparo para evitar dobles activaciones.",
+    )
+    wake_preroll_ms: int = Field(
+        default=500,
+        ge=0,
+        description=(
+            "Milisegundos ANTERIORES al disparo que se conservan. A veces la orden "
+            "empieza pegada a la palabra clave y esas silabas no se pueden perder."
+        ),
+    )
+    vad_silence_ms: int = Field(
+        default=700,
+        gt=0,
+        description="Silencio que marca el fin de una frase.",
+    )
+    max_listen_s: float = Field(
+        default=30.0,
+        gt=0,
+        description="Tope de escucha continua, con corte elegante.",
+    )
+    stt_engine: str = Field(default="local", description="Motor de transcripcion: local o cloud.")
+    stt_model: str = Field(
+        default="small",
+        description=(
+            "Modelo de faster-whisper. DECISION: 'small' y no 'large-v3-turbo' "
+            "porque esta maquina no tiene GPU dedicada y el grande en CPU no "
+            "llega ni de lejos a la meta de latencia. Ver ESTADO.md."
+        ),
+    )
+    tts_engine: str = Field(default="local", description="Motor de sintesis: local o cloud.")
+    tts_voice: str = Field(default="es_MX-claude-high", description="Voz de Piper.")
+    barge_in_enabled: bool = Field(
+        default=True,
+        description="Si hablar encima de Jarvis lo calla al instante.",
+    )
+
+
+class CognitionConfig(_Section):
+    """La cascada de tres niveles y su disciplina de costo."""
+
+    privacy_mode: PrivacyMode = Field(
+        default=PrivacyMode.HYBRID,
+        description="HYBRID normal, LOCAL_ONLY corta la nube por completo.",
+    )
+    local_model: str = Field(
+        default="qwen3:4b",
+        description=(
+            "Modelo de Ollama del nivel 2. DECISION: 4B en CPU porque no hay GPU "
+            "dedicada; la tabla de VRAM del documento maestro manda eso."
+        ),
+    )
+    local_confidence_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Debajo de esto, el nivel 2 escala al nivel 3.",
+    )
+    cloud_model_light: str = Field(default="claude-haiku-4-5-20251001")
+    cloud_model_standard: str = Field(default="claude-sonnet-5")
+    cloud_model_deep: str = Field(default="claude-opus-5")
+    daily_budget_usd: float = Field(
+        default=0.50,
+        ge=0.0,
+        description=(
+            "Tope de gasto diario. Al alcanzarlo se avisa por voz y se degrada a "
+            "solo-local en vez de seguir cobrando. Cero significa sin limite."
+        ),
+    )
+    max_context_tokens: int = Field(
+        default=8000,
+        gt=0,
+        description="Pasado este contexto, la peticion escala al nivel 3.",
+    )
+    max_chained_steps: int = Field(
+        default=3,
+        gt=0,
+        description="Mas pasos encadenados que esto, escala al nivel 3.",
+    )
+    classifier_timeout_ms: int = Field(
+        default=10,
+        gt=0,
+        description="El clasificador debe resolver dentro de esto o se asume nivel 2.",
+    )
+    max_tool_iterations: int = Field(
+        default=8,
+        gt=0,
+        description="Tope del bucle de herramientas para que no se cicle.",
+    )
+
+
+class MemoryConfig(_Section):
+    """Las cinco capas de memoria y su consolidacion."""
+
+    data_dir: Path = Field(
+        default=Path("config/data"),
+        description="Donde viven SQLite y LanceDB. Relativa a la raiz del proyecto.",
+    )
+    embedding_model: str = Field(
+        default="bge-m3",
+        description="Modelo de embeddings para la capa semantica.",
+    )
+    working_turns: int = Field(
+        default=20,
+        gt=0,
+        description="Turnos que conserva la memoria de trabajo en RAM.",
+    )
+    retrieval_budget_tokens: int = Field(
+        default=1500,
+        gt=0,
+        description="Tope de tokens que la recuperacion puede meter al contexto.",
+    )
+    retrieval_timeout_ms: int = Field(
+        default=100,
+        gt=0,
+        description="Objetivo duro de la recuperacion hibrida de punta a punta.",
+    )
+    consolidation_hour: int = Field(
+        default=4,
+        ge=0,
+        le=23,
+        description="Hora local a la que corre la consolidacion nocturna.",
+    )
+    decay_half_life_days: float = Field(
+        default=30.0,
+        gt=0,
+        description="Vida media del decaimiento por desuso.",
+    )
+    routine_promotion_threshold: int = Field(
+        default=3,
+        gt=0,
+        description="Repeticiones exitosas tras las que un patron se vuelve rutina.",
+    )
+    episodic_compression_days: int = Field(
+        default=90,
+        gt=0,
+        description="Episodios mas viejos que esto se comprimen.",
+    )
+
+
+class ToolsConfig(_Section):
+    """Servidores MCP y su ejecucion."""
+
+    enabled_servers: list[str] = Field(
+        default_factory=lambda: ["system", "files", "apps", "windows", "media"],
+        description="Servidores MCP que se levantan al arrancar.",
+    )
+    default_timeout_s: float = Field(
+        default=30.0,
+        gt=0,
+        description="Tiempo limite por herramienta.",
+    )
+    parallel_calls: bool = Field(
+        default=True,
+        description="Ejecutar en paralelo las herramientas que sean independientes.",
+    )
+    trash_retention_hours: int = Field(
+        default=48,
+        gt=0,
+        description=(
+            "Horas que sobrevive lo que Jarvis borra en su propia papelera. Con "
+            "acceso total, los errores son caros y esta es la red de seguridad."
+        ),
+    )
+    screenshot_retention_minutes: int = Field(
+        default=10,
+        gt=0,
+        description="Minutos tras los que se borran las capturas temporales.",
+    )
+    restart_backoff_s: float = Field(
+        default=1.0,
+        gt=0,
+        description="Retroceso inicial al reiniciar un servidor MCP caido.",
+    )
+
+
+class GuardianConfig(_Section):
+    """Permisos, confirmaciones, boveda y auditoria."""
+
+    policy_file: Path = Field(
+        default=Path("config/policy.toml"),
+        description="Donde vive la clasificacion de niveles por herramienta.",
+    )
+    confirmation_timeout_s: float = Field(
+        default=15.0,
+        gt=0,
+        description="Sin respuesta en este plazo, una accion ROJA se cancela.",
+    )
+    undo_stack_size: int = Field(
+        default=20,
+        gt=0,
+        description="Acciones reversibles que se recuerdan.",
+    )
+    undo_window_s: float = Field(
+        default=10.0,
+        gt=0,
+        description="Ventana en la que una accion AMBAR se puede deshacer.",
+    )
+    vault_autolock_minutes: int = Field(
+        default=30,
+        gt=0,
+        description="Inactividad tras la que la boveda se bloquea sola.",
+    )
+    audit_retention_days: int = Field(
+        default=365,
+        gt=0,
+        description="Retencion de la bitacora de auditoria.",
+    )
+
+
+class BridgeConfig(_Section):
+    """Puente remoto hacia el telefono (Fase 9)."""
+
+    enabled: bool = Field(default=False, description="Se activa en la Fase 9.")
+    host: str = Field(
+        default="127.0.0.1",
+        description=(
+            "REGLA DURA: en produccion escucha SOLO en la interfaz de Tailscale, "
+            "nunca en 0.0.0.0. El valor por defecto es la interfaz local."
+        ),
+    )
+    port: int = Field(default=8765, gt=0, le=65535)
+    heartbeat_s: float = Field(default=15.0, gt=0, description="Latido de presencia.")
+    max_clients: int = Field(default=5, gt=0, description="Dispositivos simultaneos.")
+
+
+class UIConfig(_Section):
+    """HUD de escritorio."""
+
+    layout: str = Field(
+        default="full",
+        description="Modo de disposicion: full, compact o hidden.",
+    )
+    always_on_top: bool = Field(default=True)
+    show_fps: bool = Field(default=False, description="Contador de fps en desarrollo.")
+    particle_count: int = Field(
+        default=30000,
+        gt=0,
+        description=(
+            "Puntos de la malla de la esfera. El nivel de detalle adaptativo lo "
+            "baja solo si los fotogramas caen."
+        ),
+    )
+    ui_sounds: bool = Field(default=True, description="Sonidos sinteticos de interfaz.")
+    target_fps: int = Field(default=60, gt=0)
+
+
+class JarvisConfig(BaseSettings):
+    """Configuracion completa del nucleo."""
+
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
+        env_prefix="JARVIS_",
+        env_nested_delimiter="__",
+        extra="forbid",
+        validate_assignment=True,
+        frozen=True,
+    )
+
+    user_name: str = Field(default="Usuario", description="Como se dirige Jarvis al usuario.")
+    log_level: str = Field(default="INFO", description="DEBUG, INFO, WARNING o ERROR.")
+    development: bool = Field(
+        default=True,
+        description="Salida de registro legible. En produccion, JSON puro.",
+    )
+    log_file: Path | None = Field(
+        default=Path("logs/jarvis.log"),
+        description="Archivo de registro con rotacion. None desactiva el archivo.",
+    )
+
+    voice: VoiceConfig = Field(default_factory=VoiceConfig)
+    cognition: CognitionConfig = Field(default_factory=CognitionConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    guardian: GuardianConfig = Field(default_factory=GuardianConfig)
+    bridge: BridgeConfig = Field(default_factory=BridgeConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Fija la jerarquia. El primero de la tupla es el que manda."""
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            TomlConfigSettingsSource(settings_cls, toml_file=_toml_path),
+            file_secret_settings,
+        )
+
+    def resolved(self, relative: Path) -> Path:
+        """Convierte una ruta relativa de la configuracion en absoluta."""
+        return relative if relative.is_absolute() else project_root() / relative
+
+    def to_wire(self) -> dict[str, Any]:
+        """Serializa la configuracion para mandarla al HUD."""
+        return self.model_dump(mode="json")
+
+
+def load_config(path: Path | None = None, **overrides: Any) -> JarvisConfig:
+    """Carga la configuracion aplicando la jerarquia completa.
+
+    Args:
+        path: TOML a leer. Por defecto `config/jarvis.toml`. Si el archivo no
+            existe se usan los valores por defecto, sin error: el sistema tiene
+            que poder arrancar en una maquina recien instalada.
+        **overrides: valores que ganan a todo. Solo para pruebas.
+
+    Returns:
+        La configuracion validada e inmutable.
+    """
+    global _toml_path
+    _toml_path = path if path is not None else default_config_path()
+    return JarvisConfig(**overrides)
+
+
+def config_sections() -> Sequence[str]:
+    """Nombres de las secciones anidadas. Lo usa el inspector y las pruebas."""
+    return ("voice", "cognition", "memory", "tools", "guardian", "bridge", "ui")

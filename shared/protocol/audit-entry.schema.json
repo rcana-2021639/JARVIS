@@ -1,0 +1,123 @@
+{
+  "$defs": {
+    "CommandOrigin": {
+      "description": "De donde llego una orden.",
+      "enum": [
+        "VOZ",
+        "TEXTO",
+        "MOVIL",
+        "RUTINA"
+      ],
+      "title": "CommandOrigin",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "RiskLevel": {
+      "description": "Los cuatro niveles de accion que evalua el Guardian (Fase 8).",
+      "enum": [
+        "VERDE",
+        "AMBAR",
+        "ROJO",
+        "NEGRO"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Una linea de la bitacora de solo-anadir.\n\nEs lo que convierte \"acceso total\" en algo auditable en vez de algo que hay\nque creer. Cada accion que Jarvis ejecuta deja una de estas, incluidas las\nde nivel VERDE que no piden permiso.\n\nEl campo `previous_hash` prepara el encadenamiento de hashes de la Fase 8:\ncada entrada referencia el hash de la anterior, de modo que alterar una\nentrada vieja invalida toda la cadena posterior y se nota.\n\nREGLA ABSOLUTA: `arguments` va saneado. El valor de una credencial jamas\nentra aqui -- se sustituye por `<credencial:sitio>` antes de construir la\nentrada. Ver `redact_credential`.",
+  "properties": {
+    "action": {
+      "description": "Que se hizo, en forma `servidor.herramienta`.",
+      "minLength": 1,
+      "title": "Action",
+      "type": "string"
+    },
+    "arguments": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Argumentos SANEADOS. Nunca valores de credenciales.",
+      "title": "Arguments",
+      "type": "object"
+    },
+    "confirmed": {
+      "default": false,
+      "description": "Si el usuario la confirmo hablando. Obligatorio en nivel ROJO.",
+      "title": "Confirmed",
+      "type": "boolean"
+    },
+    "correlation_id": {
+      "description": "Interaccion que la origino.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "duration_ms": {
+      "default": 0.0,
+      "description": "Cuanto tardo.",
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "entry_id": {
+      "description": "Identificador de esta entrada.",
+      "title": "Entry Id",
+      "type": "string"
+    },
+    "level": {
+      "$ref": "#/$defs/RiskLevel",
+      "description": "Nivel con el que se evaluo la accion."
+    },
+    "origin": {
+      "$ref": "#/$defs/CommandOrigin",
+      "description": "Por que canal llego la orden que la origino."
+    },
+    "previous_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Hash de la entrada anterior. Encadena la bitacora (Fase 8).",
+      "title": "Previous Hash"
+    },
+    "result": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Resumen legible del resultado o del error.",
+      "title": "Result"
+    },
+    "success": {
+      "description": "Si la accion termino bien.",
+      "title": "Success",
+      "type": "boolean"
+    },
+    "timestamp": {
+      "description": "Cuando ocurrio.",
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "action",
+    "level",
+    "origin",
+    "success",
+    "correlation_id"
+  ],
+  "title": "AuditEntry",
+  "type": "object"
+}

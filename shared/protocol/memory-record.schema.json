@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "JsonValue": {},
+    "MemoryKind": {
+      "description": "Las cinco capas del sistema de memoria (Fase 3).",
+      "enum": [
+        "TRABAJO",
+        "EPISODICA",
+        "SEMANTICA",
+        "ENTIDAD",
+        "PROCEDIMIENTO"
+      ],
+      "title": "MemoryKind",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Una unidad de memoria, de cualquiera de las cinco capas.\n\nLas cinco capas comparten contrato a proposito: la recuperacion hibrida de\nla Fase 3 corre cuatro busquedas en paralelo sobre almacenes distintos\n(SQLite, LanceDB, el grafo) y las fusiona con Reciprocal Rank Fusion. Esa\nfusion solo es simple si todo lo que sale de los cuatro tiene la misma\nforma. `kind` dice de que capa vino; el resto es identico.",
+  "properties": {
+    "content": {
+      "description": "El contenido en texto. Es lo que se indexa y lo que ve el modelo.",
+      "minLength": 1,
+      "title": "Content",
+      "type": "string"
+    },
+    "decay": {
+      "default": 0.0,
+      "description": "Cuanto se ha desvanecido por desuso. La consolidacion nocturna lo sube.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Decay",
+      "type": "number"
+    },
+    "embedding": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Vector del contenido. Solo lo llevan los registros de la capa SEMANTICA; en las demas es None y no se calcula.",
+      "title": "Embedding"
+    },
+    "importance": {
+      "default": 0.5,
+      "description": "Cuanto pesa este recuerdo. 1.0 es permanente y no decae nunca.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Importance",
+      "type": "number"
+    },
+    "kind": {
+      "$ref": "#/$defs/MemoryKind",
+      "description": "Capa de memoria a la que pertenece."
+    },
+    "last_accessed_at": {
+      "description": "Ultima vez que se recupero. El decaimiento se calcula desde aqui.",
+      "format": "date-time",
+      "title": "Last Accessed At",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Datos propios de cada capa: entidades citadas, id del episodio, etc.",
+      "title": "Metadata",
+      "type": "object"
+    },
+    "record_id": {
+      "description": "Identificador estable del registro.",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "description": "Cuando ocurrio o se aprendio.",
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "content"
+  ],
+  "title": "MemoryRecord",
+  "type": "object"
+}

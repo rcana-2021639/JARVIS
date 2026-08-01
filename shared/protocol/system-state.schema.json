@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    },
+    "CoreState": {
+      "description": "Los ocho estados del nucleo. Gobiernan la esfera 3D del HUD (Fase 4).",
+      "enum": [
+        "DORMIDO",
+        "DESPIERTO",
+        "ESCUCHANDO",
+        "PENSANDO",
+        "HABLANDO",
+        "EJECUTANDO",
+        "ERROR",
+        "CONFIRMANDO"
+      ],
+      "title": "CoreState",
+      "type": "string"
+    },
+    "PrivacyMode": {
+      "description": "Modos de privacidad. Determinan si la cascada puede llegar al nivel 3.",
+      "enum": [
+        "HYBRID",
+        "LOCAL_ONLY",
+        "CLOUD_PREFERRED"
+      ],
+      "title": "PrivacyMode",
+      "type": "string"
+    },
+    "Telemetry": {
+      "additionalProperties": false,
+      "description": "Foto instantanea de la salud de la maquina y del propio Jarvis.\n\nAlimenta el panel de telemetria del HUD (Fase 5), que exige datos reales y\nno simulados. Los campos opcionales son los que no toda maquina expone: en\nuna maquina sin GPU dedicada, `vram_used_mb` y `gpu_percent` son None y el\nHUD debe ocultar esos medidores en vez de dibujar ceros.",
+      "properties": {
+        "captured_at": {
+          "description": "Cuando se tomo la medicion.",
+          "format": "date-time",
+          "title": "Captured At",
+          "type": "string"
+        },
+        "cpu_per_core": {
+          "description": "Uso por nucleo. El HUD lo dibuja como ecualizador vertical.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Cpu Per Core",
+          "type": "array"
+        },
+        "cpu_percent": {
+          "description": "Uso total de CPU.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Cpu Percent",
+          "type": "number"
+        },
+        "disk_free_gb": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Espacio libre en el disco principal.",
+          "title": "Disk Free Gb"
+        },
+        "gpu_percent": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Uso de GPU. None si no se puede medir.",
+          "title": "Gpu Percent"
+        },
+        "net_down_kbps": {
+          "default": 0.0,
+          "description": "Bajada actual.",
+          "minimum": 0.0,
+          "title": "Net Down Kbps",
+          "type": "number"
+        },
+        "net_up_kbps": {
+          "default": 0.0,
+          "description": "Subida actual.",
+          "minimum": 0.0,
+          "title": "Net Up Kbps",
+          "type": "number"
+        },
+        "ram_total_mb": {
+          "description": "RAM total de la maquina.",
+          "exclusiveMinimum": 0.0,
+          "title": "Ram Total Mb",
+          "type": "number"
+        },
+        "ram_used_mb": {
+          "description": "RAM en uso, en megabytes.",
+          "minimum": 0.0,
+          "title": "Ram Used Mb",
+          "type": "number"
+        },
+        "temperature_c": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Temperatura del paquete de CPU, si el sistema la expone.",
+          "title": "Temperature C"
+        },
+        "vram_total_mb": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "VRAM total. None si no hay GPU dedicada.",
+          "title": "Vram Total Mb"
+        },
+        "vram_used_mb": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "VRAM en uso. None si no hay GPU dedicada.",
+          "title": "Vram Used Mb"
+        }
+      },
+      "required": [
+        "cpu_percent",
+        "ram_used_mb",
+        "ram_total_mb"
+      ],
+      "title": "Telemetry",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "El estado global de Jarvis en un instante.\n\nEs lo que el HUD y la app movil reciben para saber que dibujar: el estado\ndel nucleo gobierna la esfera 3D, el modo de privacidad se muestra siempre\nvisible, y el gasto del dia alimenta la barra de presupuesto.\n\nEs un contrato inmutable como todos los demas: cada cambio de estado produce\nuna instancia nueva y un evento CORE_STATE_CHANGED. Nadie muta el estado\nglobal por debajo -- asi el timeline reconstruye la historia completa.",
+  "properties": {
+    "active_level": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CascadeLevel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nivel de la cascada que atiende ahora mismo. None si esta ocioso."
+    },
+    "budget_today_usd": {
+      "default": 0.0,
+      "description": "Presupuesto diario configurado. Cero significa sin limite.",
+      "minimum": 0.0,
+      "title": "Budget Today Usd",
+      "type": "number"
+    },
+    "core_state": {
+      "$ref": "#/$defs/CoreState",
+      "default": "DORMIDO",
+      "description": "Estado del nucleo. Gobierna la esfera del HUD."
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Interaccion en curso, si la hay.",
+      "title": "Correlation Id"
+    },
+    "microphone_muted": {
+      "default": false,
+      "description": "Si el microfono esta silenciado por el usuario o por el killswitch.",
+      "title": "Microphone Muted",
+      "type": "boolean"
+    },
+    "privacy_mode": {
+      "$ref": "#/$defs/PrivacyMode",
+      "default": "HYBRID",
+      "description": "Modo de privacidad activo. LOCAL_ONLY corta el nivel 3."
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Sesion de conversacion activa. None cuando no hay ninguna abierta.",
+      "title": "Session Id"
+    },
+    "spent_today_usd": {
+      "default": 0.0,
+      "description": "Gasto acumulado del dia en la API de la nube.",
+      "minimum": 0.0,
+      "title": "Spent Today Usd",
+      "type": "number"
+    },
+    "telemetry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Telemetry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Ultima telemetria conocida. None mientras el nucleo arranca."
+    },
+    "updated_at": {
+      "description": "Cuando se produjo este estado.",
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    }
+  },
+  "title": "SystemState",
+  "type": "object"
+}

@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "JsonValue": {},
+    "RiskLevel": {
+      "description": "Los cuatro niveles de accion que evalua el Guardian (Fase 8).",
+      "enum": [
+        "VERDE",
+        "AMBAR",
+        "ROJO",
+        "NEGRO"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "La invocacion de una herramienta expuesta por un servidor MCP.\n\nCada herramienta declara obligatoriamente su nivel de riesgo. El Guardian\n(Fase 8) lee `risk_level` antes de dejar pasar la llamada y puede subirlo\nsegun los argumentos concretos: borrar un temporal es AMBAR, borrar algo en\nDocumentos es ROJO.",
+  "properties": {
+    "arguments": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "description": "Argumentos ya validados contra el esquema de entrada de la herramienta.",
+      "title": "Arguments",
+      "type": "object"
+    },
+    "call_id": {
+      "description": "Identificador de esta invocacion. Lo referencia el ToolResult.",
+      "title": "Call Id",
+      "type": "string"
+    },
+    "correlation_id": {
+      "description": "Interaccion que origino esta llamada.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "risk_level": {
+      "$ref": "#/$defs/RiskLevel",
+      "description": "Nivel declarado por la herramienta, antes de las reglas contextuales."
+    },
+    "server": {
+      "description": "Servidor MCP que expone la herramienta: files, apps, shell, browser...",
+      "minLength": 1,
+      "title": "Server",
+      "type": "string"
+    },
+    "tool": {
+      "description": "Nombre de la herramienta dentro del servidor.",
+      "minLength": 1,
+      "title": "Tool",
+      "type": "string"
+    }
+  },
+  "required": [
+    "server",
+    "tool",
+    "risk_level",
+    "correlation_id"
+  ],
+  "title": "ToolCall",
+  "type": "object"
+}

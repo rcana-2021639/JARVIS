@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contracts": {
+    "AuditEntry": "audit-entry.schema.json",
+    "Command": "command.schema.json",
+    "Event": "event.schema.json",
+    "Intent": "intent.schema.json",
+    "MemoryRecord": "memory-record.schema.json",
+    "Response": "response.schema.json",
+    "SystemState": "system-state.schema.json",
+    "Telemetry": "telemetry.schema.json",
+    "ToolCall": "tool-call.schema.json",
+    "ToolResult": "tool-result.schema.json",
+    "Utterance": "utterance.schema.json"
+  },
+  "description": "Indice de los contratos compartidos entre el nucleo, el HUD y el movil.",
+  "enums": "enums.json",
+  "generatedBy": "scripts/export_schemas.py",
+  "title": "JarvisProtocolIndex"
+}

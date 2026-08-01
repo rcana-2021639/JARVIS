@@ -1,0 +1,51 @@
+{
+  "$defs": {
+    "JsonValue": {}
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "El resultado de ejecutar una herramienta.\n\nNunca se lanza una excepcion a traves del bus: un fallo es un ToolResult con\n`success=False` y `error` poblado. Asi el orquestador puede decidir si\nreintenta con una estrategia alterna (Fase 12) sin envolver todo en\ntry/except, y el fallo queda registrado igual que un exito.",
+  "properties": {
+    "call_id": {
+      "description": "Identificador de la ToolCall que produjo este resultado.",
+      "title": "Call Id",
+      "type": "string"
+    },
+    "data": {
+      "$ref": "#/$defs/JsonValue",
+      "default": null,
+      "description": "Datos devueltos por la herramienta. None si no devuelve nada."
+    },
+    "duration_ms": {
+      "description": "Cuanto tardo la ejecucion, en milisegundos.",
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Mensaje de error legible. Obligatorio cuando success es False.",
+      "title": "Error"
+    },
+    "success": {
+      "description": "Si la herramienta cumplio su cometido.",
+      "title": "Success",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "call_id",
+    "success",
+    "duration_ms"
+  ],
+  "title": "ToolResult",
+  "type": "object"
+}

@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    },
+    "CommandOrigin": {
+      "description": "De donde llego una orden.",
+      "enum": [
+        "VOZ",
+        "TEXTO",
+        "MOVIL",
+        "RUTINA"
+      ],
+      "title": "CommandOrigin",
+      "type": "string"
+    },
+    "Intent": {
+      "additionalProperties": false,
+      "description": "Lo que el clasificador entendio que el usuario quiere.\n\nEl clasificador debe resolver en menos de 10ms, asi que no razona: hace\ncoincidencia contra un catalogo de patrones y, si no hay coincidencia clara,\nconsulta un clasificador de embeddings pequeno. `suggested_level` es su\nrecomendacion, no una orden: el enrutador de la Fase 2 tiene la ultima\npalabra y puede escalar por otros motivos.",
+      "properties": {
+        "confidence": {
+          "description": "Que tan seguro esta el clasificador de haber acertado.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "entities": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "description": "Parametros extraidos del texto: {'app': 'spotify'}, {'delta': 10}.",
+          "title": "Entities",
+          "type": "object"
+        },
+        "name": {
+          "description": "Nombre canonico de la intencion: media.volume_up, apps.open, chat.free...",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "suggested_level": {
+          "$ref": "#/$defs/CascadeLevel",
+          "description": "Nivel de la cascada que el clasificador cree suficiente."
+        }
+      },
+      "required": [
+        "name",
+        "confidence",
+        "suggested_level"
+      ],
+      "title": "Intent",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Una orden lista para ejecutarse.\n\nEs la union entre lo que el usuario dijo literalmente (`raw_text`, que se\nconserva porque el modelo a veces lo necesita entero) y lo que el\nclasificador entendio (`intent`).",
+  "properties": {
+    "command_id": {
+      "description": "Identificador de esta orden concreta.",
+      "title": "Command Id",
+      "type": "string"
+    },
+    "correlation_id": {
+      "description": "Interaccion a la que pertenece.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "Cuando se construyo la orden.",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "intent": {
+      "$ref": "#/$defs/Intent",
+      "description": "Intencion clasificada."
+    },
+    "origin": {
+      "$ref": "#/$defs/CommandOrigin",
+      "description": "Por que canal entro la orden."
+    },
+    "raw_text": {
+      "description": "El texto tal cual llego, sin normalizar. Nunca se descarta.",
+      "title": "Raw Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "intent",
+    "raw_text",
+    "origin",
+    "correlation_id"
+  ],
+  "title": "Command",
+  "type": "object"
+}

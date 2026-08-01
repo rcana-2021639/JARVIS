@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Valores canonicos de los enums del nucleo. El HUD y la app movil los consumen para no redeclarar constantes a mano.",
+  "enums": {
+    "CascadeLevel": [
+      1,
+      2,
+      3
+    ],
+    "CommandOrigin": [
+      "VOZ",
+      "TEXTO",
+      "MOVIL",
+      "RUTINA"
+    ],
+    "CoreState": [
+      "DORMIDO",
+      "DESPIERTO",
+      "ESCUCHANDO",
+      "PENSANDO",
+      "HABLANDO",
+      "EJECUTANDO",
+      "ERROR",
+      "CONFIRMANDO"
+    ],
+    "Emotion": [
+      "NEUTRAL",
+      "AFIRMATIVA",
+      "ALERTA",
+      "ERROR",
+      "INTERROGATIVA"
+    ],
+    "EventType": [
+      "core.state.changed",
+      "core.started",
+      "core.stopping",
+      "core.error",
+      "trace.span",
+      "bus.metrics",
+      "bus.consumer.lagging",
+      "config.reloaded",
+      "voice.wake.detected",
+      "voice.level",
+      "voice.speech.started",
+      "voice.speech.ended",
+      "voice.stt.partial",
+      "voice.stt.final",
+      "voice.tts.started",
+      "voice.tts.amplitude",
+      "voice.tts.finished",
+      "voice.barge_in",
+      "cognition.intent.classified",
+      "cognition.routed",
+      "cognition.response",
+      "memory.record.stored",
+      "memory.consolidation.finished",
+      "tool.call.started",
+      "tool.call.finished",
+      "guardian.audit.entry",
+      "guardian.confirmation.required",
+      "guardian.killswitch"
+    ],
+    "Language": [
+      "es",
+      "en"
+    ],
+    "MemoryKind": [
+      "TRABAJO",
+      "EPISODICA",
+      "SEMANTICA",
+      "ENTIDAD",
+      "PROCEDIMIENTO"
+    ],
+    "PrivacyMode": [
+      "HYBRID",
+      "LOCAL_ONLY",
+      "CLOUD_PREFERRED"
+    ],
+    "RiskLevel": [
+      "VERDE",
+      "AMBAR",
+      "ROJO",
+      "NEGRO"
+    ]
+  },
+  "title": "JarvisEnums"
+}

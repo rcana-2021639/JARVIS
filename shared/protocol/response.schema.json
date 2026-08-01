@@ -1,0 +1,144 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    },
+    "Emotion": {
+      "description": "Intencion expresiva de una respuesta hablada.\n\nDeliberadamente corta. La personalidad de Jarvis es seca y precisa: no hay\nentusiasmo ni servilismo que expresar, asi que no hay enum que lo soporte.",
+      "enum": [
+        "NEUTRAL",
+        "AFIRMATIVA",
+        "ALERTA",
+        "ERROR",
+        "INTERROGATIVA"
+      ],
+      "title": "Emotion",
+      "type": "string"
+    },
+    "JsonValue": {},
+    "RiskLevel": {
+      "description": "Los cuatro niveles de accion que evalua el Guardian (Fase 8).",
+      "enum": [
+        "VERDE",
+        "AMBAR",
+        "ROJO",
+        "NEGRO"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    },
+    "ToolCall": {
+      "additionalProperties": false,
+      "description": "La invocacion de una herramienta expuesta por un servidor MCP.\n\nCada herramienta declara obligatoriamente su nivel de riesgo. El Guardian\n(Fase 8) lee `risk_level` antes de dejar pasar la llamada y puede subirlo\nsegun los argumentos concretos: borrar un temporal es AMBAR, borrar algo en\nDocumentos es ROJO.",
+      "properties": {
+        "arguments": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "description": "Argumentos ya validados contra el esquema de entrada de la herramienta.",
+          "title": "Arguments",
+          "type": "object"
+        },
+        "call_id": {
+          "description": "Identificador de esta invocacion. Lo referencia el ToolResult.",
+          "title": "Call Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "description": "Interaccion que origino esta llamada.",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "risk_level": {
+          "$ref": "#/$defs/RiskLevel",
+          "description": "Nivel declarado por la herramienta, antes de las reglas contextuales."
+        },
+        "server": {
+          "description": "Servidor MCP que expone la herramienta: files, apps, shell, browser...",
+          "minLength": 1,
+          "title": "Server",
+          "type": "string"
+        },
+        "tool": {
+          "description": "Nombre de la herramienta dentro del servidor.",
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server",
+        "tool",
+        "risk_level",
+        "correlation_id"
+      ],
+      "title": "ToolCall",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Lo que Jarvis contesta, mas la contabilidad de como lo resolvio.\n\n`handled_by_level` y `estimated_cost_usd` no son telemetria opcional: son la\nmateria prima con la que la Fase 12 afina los umbrales de la cascada, y lo\nque el panel cognitivo del HUD muestra en vivo. Toda respuesta los lleva,\nincluidas las de nivel 1 (donde el costo es exactamente cero).",
+  "properties": {
+    "actions": {
+      "description": "Herramientas invocadas para producir esta respuesta.",
+      "items": {
+        "$ref": "#/$defs/ToolCall"
+      },
+      "title": "Actions",
+      "type": "array"
+    },
+    "correlation_id": {
+      "description": "Interaccion a la que responde.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "Cuando se genero la respuesta.",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "emotion": {
+      "$ref": "#/$defs/Emotion",
+      "default": "NEUTRAL",
+      "description": "Intencion expresiva con la que se sintetiza."
+    },
+    "estimated_cost_usd": {
+      "default": 0.0,
+      "description": "Costo estimado en dolares. Cero en los niveles 1 y 2.",
+      "minimum": 0.0,
+      "title": "Estimated Cost Usd",
+      "type": "number"
+    },
+    "handled_by_level": {
+      "$ref": "#/$defs/CascadeLevel",
+      "description": "Que nivel de la cascada atendio esta respuesta."
+    },
+    "should_speak": {
+      "default": true,
+      "description": "Si debe sintetizarse en voz o solo aparecer en el chat del HUD.",
+      "title": "Should Speak",
+      "type": "boolean"
+    },
+    "text": {
+      "description": "El texto de la respuesta.",
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text",
+    "handled_by_level",
+    "correlation_id"
+  ],
+  "title": "Response",
+  "type": "object"
+}

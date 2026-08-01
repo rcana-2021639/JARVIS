@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "Language": {
+      "description": "Idiomas que el pipeline de voz reconoce.",
+      "enum": [
+        "es",
+        "en"
+      ],
+      "title": "Language",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Un fragmento de audio ya transcrito a texto.\n\nEl motor de transcripcion emite muchas Utterance parciales mientras el\nusuario habla (`is_final=False`, que el HUD muestra en gris apareciendo\npalabra por palabra) y exactamente una final cuando el detector de fin de\nhabla decide que la frase termino.\n\nSolo la final alimenta al clasificador de intencion. Las parciales existen\npara que la interfaz se sienta viva y, desde la Fase 7, para la ejecucion\noptimista: empezar a abrir YouTube mientras el usuario aun termina la frase.",
+  "properties": {
+    "confidence": {
+      "description": "Confianza del motor de transcripcion, de 0 a 1.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "correlation_id": {
+      "description": "Interaccion a la que pertenece esta transcripcion.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "duration_ms": {
+      "description": "Duracion del audio transcrito en milisegundos.",
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "ended_at": {
+      "description": "Instante en que termino el audio de esta transcripcion.",
+      "format": "date-time",
+      "title": "Ended At",
+      "type": "string"
+    },
+    "is_final": {
+      "default": false,
+      "description": "Si es la transcripcion definitiva o una parcial en vivo.",
+      "title": "Is Final",
+      "type": "boolean"
+    },
+    "language": {
+      "$ref": "#/$defs/Language",
+      "default": "es",
+      "description": "Idioma detectado. El pipeline distingue espanol de ingles tecnico."
+    },
+    "started_at": {
+      "description": "Instante en que empezo el audio de esta transcripcion.",
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "text": {
+      "description": "Texto transcrito. Puede venir vacio si el usuario no dijo nada.",
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text",
+    "confidence",
+    "duration_ms",
+    "correlation_id"
+  ],
+  "title": "Utterance",
+  "type": "object"
+}

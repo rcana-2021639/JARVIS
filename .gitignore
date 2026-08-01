@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# SECRETOS -- nunca, bajo ninguna circunstancia, versionados.
+# El repositorio es publico. Las claves viven en .env y, desde la Fase 8,
+# en el llavero nativo del sistema operativo.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+secrets/
+config/policy.local.toml
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ---------------------------------------------------------------------------
+# Node / Electron / Expo
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+.expo/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Datos en tiempo de ejecucion -- memoria, registros, modelos, capturas
+# ---------------------------------------------------------------------------
+config/data/
+logs/
+*.log
+models/
+*.gguf
+*.onnx
+screenshots/
+.jarvis-trash/
+
+# ---------------------------------------------------------------------------
+# Sistema operativo y editores
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
