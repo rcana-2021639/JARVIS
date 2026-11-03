@@ -11,6 +11,11 @@ dependencies = [
     "structlog>=24.4",
     "watchfiles>=0.24",
     "numpy>=1.26",
+    # Fase 2: la cascada cognitiva.
+    "rapidfuzz>=3.9",
+    "anthropic>=2.0",
+    "httpx2>=2.16",
+    "keyring>=25",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +27,13 @@ voice = [
     "faster-whisper>=1.1",
     "openwakeword>=0.6",
     "piper-tts>=1.3",
+]
+# El clasificador de embeddings (MiniLM en ONNX). Sin esto la cascada funciona
+# solo con patrones, que cubren todas las ordenes de forma fija.
+cognition = [
+    "onnxruntime>=1.17",
+    "tokenizers>=0.19",
+    "huggingface_hub>=0.25",
 ]
 dev = [
     "pytest>=8.3",
@@ -37,6 +49,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["core"]
 include = ["jarvis*"]
+
+[tool.setuptools.package-data]
+"jarvis.cognition.prompts" = ["*.md"]
 
 # ---------------------------------------------------------------------------
 # RUFF -- formato y linting
@@ -78,6 +93,9 @@ ignore = [
 # las pruebas del vigilante de configuracion: simulan a un usuario guardando el
 # TOML desde su editor, que tampoco lo hace de forma asincrona.
 "tests/*" = ["ANN", "ASYNC240"]
+# Los catalogos de intenciones son tablas de regex: partirlas en varias lineas
+# las vuelve ilegibles. Llevan `fmt: skip` por la misma razon.
+"core/jarvis/cognition/intents_*.py" = ["E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -109,6 +127,8 @@ module = [
     "piper.*",
     "sounddevice",
     "scipy.*",
+    # El clasificador de intencion (Fase 2) usa onnxruntime, que tampoco los publica.
+    "onnxruntime.*",
 ]
 ignore_missing_imports = true
 

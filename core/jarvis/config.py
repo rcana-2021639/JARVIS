@@ -44,6 +44,7 @@ __all__ = [
     "GuardianConfig",
     "JarvisConfig",
     "MemoryConfig",
+    "ModelPrice",
     "ToolsConfig",
     "UIConfig",
     "VoiceConfig",
@@ -250,6 +251,23 @@ class VoiceConfig(_Section):
     )
 
 
+class ModelPrice(_Section):
+    """Precio de un modelo de la nube, en dolares por millon de tokens."""
+
+    input_per_mtok: float = Field(ge=0.0)
+    output_per_mtok: float = Field(ge=0.0)
+
+
+def _default_prices() -> dict[str, ModelPrice]:
+    # Tarifas publicas de la API de Anthropic (octubre de 2026). Si cambian, se
+    # corrigen en jarvis.toml sin tocar codigo.
+    return {
+        "claude-haiku-5-5": ModelPrice(input_per_mtok=0.10, output_per_mtok=0.50),
+        "claude-sonnet-5-5": ModelPrice(input_per_mtok=2.00, output_per_mtok=10.00),
+        "claude-opus-5-5": ModelPrice(input_per_mtok=4.00, output_per_mtok=20.00),
+    }
+
+
 class CognitionConfig(_Section):
     """La cascada de tres niveles y su disciplina de costo."""
 
@@ -257,6 +275,50 @@ class CognitionConfig(_Section):
         default=PrivacyMode.HYBRID,
         description="HYBRID normal, LOCAL_ONLY corta la nube por completo.",
     )
+
+    # --- Clasificador -------------------------------------------------------
+    classifier_engine: Literal["embeddings", "patterns"] = Field(
+        default="embeddings",
+        description="patterns se queda solo con regex y difusa; no carga ningun modelo.",
+    )
+    intent_model_dir: Path = Field(
+        default=Path("models/intent"),
+        description=(
+            "MiniLM multilingue en ONNX. Se baja con scripts/download_cognition_models.py."
+        ),
+    )
+    fuzzy_threshold: float = Field(
+        default=86.0,
+        ge=0.0,
+        le=100.0,
+        description="Puntaje minimo de rapidfuzz para aceptar una frase de forma fija.",
+    )
+    embedding_min_similarity: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Debajo de esto el ejemplo mas parecido no cuenta: se trata como charla.",
+    )
+    embedding_fast_similarity: float = Field(
+        default=0.80,
+        ge=0.0,
+        le=1.0,
+        description="Similitud minima para mandar al nivel 1 algo que solo los embeddings vieron.",
+    )
+    fast_path_min_confidence: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Confianza del clasificador por debajo de la cual el nivel 1 no se arriesga.",
+    )
+    classifier_timeout_ms: int = Field(
+        default=10,
+        gt=0,
+        description="Meta de tiempo del clasificador. Pasarse se registra como aviso.",
+    )
+
+    # --- Nivel 2: modelo local ---------------------------------------------
+    ollama_url: str = Field(default="http://127.0.0.1:11434")
     local_model: str = Field(
         default="qwen3:4b",
         description=(
@@ -264,15 +326,79 @@ class CognitionConfig(_Section):
             "dedicada; la tabla de VRAM del documento maestro manda eso."
         ),
     )
+    local_temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+    local_max_tokens: int = Field(default=160, gt=0, description="Tope de tokens generados.")
+    local_num_ctx: int = Field(default=4096, gt=0, description="Ventana de contexto de Ollama.")
+    local_keep_alive: str = Field(
+        default="-1",
+        description=(
+            "Cuanto conserva Ollama el modelo en RAM. -1 es para siempre: la carga "
+            "en frio cuesta segundos y arruina la latencia."
+        ),
+    )
+    local_timeout_s: float = Field(
+        default=60.0,
+        gt=0.0,
+        description="Tope de una respuesta completa del nivel 2.",
+    )
+    local_tools: bool = Field(
+        default=False,
+        description=(
+            "Si el nivel 2 puede llamar herramientas. DECISION: apagado en esta CPU: "
+            "qwen3:4b ignora /no_think en ese modo, escribe su razonamiento como texto "
+            "y tarda 40+ s. Sin herramientas contesta siempre con esquema."
+        ),
+    )
     local_confidence_threshold: float = Field(
-        default=0.7,
+        default=0.6,
         ge=0.0,
         le=1.0,
         description="Debajo de esto, el nivel 2 escala al nivel 3.",
     )
-    cloud_model_light: str = Field(default="claude-haiku-4-5-20251001")
-    cloud_model_standard: str = Field(default="claude-sonnet-5")
-    cloud_model_deep: str = Field(default="claude-opus-5")
+    confidence_logprob_weight: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Peso de la probabilidad de los tokens frente a la autoevaluacion.",
+    )
+    confidence_stream_margin: float = Field(
+        default=0.15,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Con confianza temprana >= umbral + margen se habla en streaming. Entre el "
+            "umbral y eso, se genera entera y se mide antes de decir nada."
+        ),
+    )
+    fast_step_percent: int = Field(
+        default=10,
+        gt=0,
+        le=100,
+        description="Cuanto suben o bajan volumen y brillo sin numero explicito.",
+    )
+    spoken_max_sentences: int = Field(
+        default=2,
+        gt=0,
+        description="Frases que se dicen en voz alta; el resto va al chat.",
+    )
+
+    # --- Nivel 3: API de Claude ---------------------------------------------
+    cloud_model_light: str = Field(default="claude-haiku-5-5")
+    cloud_model_standard: str = Field(default="claude-sonnet-5-5")
+    cloud_model_deep: str = Field(default="claude-opus-5-5")
+    cloud_effort: Literal["low", "medium", "high"] = Field(
+        default="low",
+        description="Esfuerzo de razonamiento para lo hablado. Mas esfuerzo, mas latencia.",
+    )
+    cloud_max_tokens: int = Field(default=2048, gt=0)
+    cloud_timeout_s: float = Field(default=30.0, gt=0.0)
+    cloud_retries: int = Field(default=3, ge=0, description="Reintentos ante 429, 5xx o red.")
+    cloud_retry_base_s: float = Field(
+        default=0.5,
+        gt=0.0,
+        description="Primera espera; se duplica en cada reintento.",
+    )
+    cloud_prices: dict[str, ModelPrice] = Field(default_factory=_default_prices)
     daily_budget_usd: float = Field(
         default=0.50,
         ge=0.0,
@@ -281,6 +407,12 @@ class CognitionConfig(_Section):
             "solo-local en vez de seguir cobrando. Cero significa sin limite."
         ),
     )
+    spend_ledger: Path = Field(
+        default=Path("config/data/spend.json"),
+        description="Donde se guarda el gasto del dia, para que reiniciar no lo borre.",
+    )
+
+    # --- Enrutador y contexto -----------------------------------------------
     max_context_tokens: int = Field(
         default=8000,
         gt=0,
@@ -291,16 +423,27 @@ class CognitionConfig(_Section):
         gt=0,
         description="Mas pasos encadenados que esto, escala al nivel 3.",
     )
-    classifier_timeout_ms: int = Field(
-        default=10,
+    cloud_context_tokens: int = Field(
+        default=32000,
         gt=0,
-        description="El clasificador debe resolver dentro de esto o se asume nivel 2.",
+        description="Presupuesto del contexto que ve el nivel 3. La nube aguanta mucho mas.",
+    )
+    local_context_tokens: int = Field(
+        default=1500,
+        gt=0,
+        description="Presupuesto del contexto que ve el nivel 2. En CPU, cada token cuesta.",
+    )
+    history_turns: int = Field(
+        default=12,
+        gt=0,
+        description="Turnos que se guardan en RAM. Lo mas viejo se resume en una linea.",
     )
     max_tool_iterations: int = Field(
         default=8,
         gt=0,
         description="Tope del bucle de herramientas para que no se cicle.",
     )
+    tool_timeout_s: float = Field(default=10.0, gt=0.0, description="Tope de una herramienta.")
 
 
 class MemoryConfig(_Section):

@@ -129,7 +129,9 @@ async def test_traced_mide_una_corrutina_y_publica_al_bus(bus: InMemoryEventBus)
     assert carga["ok"] is True
     duracion = carga["duration_ms"]
     assert isinstance(duracion, float)
-    assert duracion >= 20.0
+    # En Windows el temporizador de asyncio puede despertar un pelo antes: con
+    # la CPU ocupada se midio 19.7 ms para un sleep de 20.
+    assert duracion >= 18.0
 
 
 async def test_traced_publica_tambien_cuando_falla(bus: InMemoryEventBus) -> None:

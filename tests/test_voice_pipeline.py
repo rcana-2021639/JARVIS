@@ -21,6 +21,7 @@ from jarvis.contracts import (
     Event,
     EventType,
     Response,
+    ResponseChunk,
     SpeechActivity,
     SpeechEndReason,
     SpeechOutput,
@@ -524,3 +525,52 @@ async def test_si_la_fuente_se_acaba_a_media_frase_se_transcribe_lo_que_hubo(
     assert ended.reason is SpeechEndReason.SILENCIO
     assert len(h.of(EventType.VOICE_STT_FINAL)) == 1
     assert not result.interrupted
+
+
+# ---------------------------------------------------------------------------
+# Respuestas en streaming (Fase 2)
+# ---------------------------------------------------------------------------
+
+
+def _chunk(text: str, index: int, cid: str = "c1") -> Event:
+    chunk = ResponseChunk(text=text, index=index, level=CascadeLevel.LOCAL_LLM, correlation_id=cid)
+    return Event.of(EventType.COGNITION_RESPONSE_CHUNK, chunk, source="test", correlation_id=cid)
+
+
+async def test_dice_los_trozos_en_orden_y_no_repite_la_respuesta(harness_factory) -> None:
+    h = harness_factory(timeline(("silence", 100)))
+    await h.pipeline.start()
+    await h.bus.publish(_chunk("Primera frase.", 0))
+    await h.bus.publish(_chunk("Segunda frase.", 1))
+    streamed = Response(
+        text="Primera frase. Segunda frase.",
+        handled_by_level=CascadeLevel.LOCAL_LLM,
+        streamed=True,
+        correlation_id="c1",
+    )
+    await h.bus.publish(Event.of(EventType.COGNITION_RESPONSE, streamed, source="test"))
+    await h.bus.wait_idle(2)
+    assert await h.pipeline.wait_idle(5)
+    await h.bus.wait_idle(2)
+
+    assert h.tts.texts == ["Primera frase.", "Segunda frase."]
+    # Entre una frase y la siguiente no se vuelve a dormir: el HUD no parpadea.
+    assert h.states() == [CoreState.HABLANDO, CoreState.DORMIDO]
+
+
+async def test_una_orden_nueva_descarta_lo_pendiente_de_la_anterior(harness_factory) -> None:
+    audio = timeline(("silence", 400), ("wake", 200), ("speech", 400))
+    h = harness_factory(audio, tts=FakeTTS(piece_ms=1000), realtime=True)
+    await h.pipeline.start()
+    for index in range(3):
+        await h.bus.publish(_chunk(f"Frase vieja {index}.", index, cid="vieja"))
+    await asyncio.wait_for(h.pipeline.source_finished.wait(), 10)
+    assert await h.pipeline.wait_idle(10)
+    await h.bus.wait_idle(2)
+
+    # La primera sono y la palabra clave la corto; las otras dos ya no se dicen.
+    assert h.tts.texts == ["Frase vieja 0."]
+    await h.bus.publish(_chunk("Frase vieja tardia.", 3, cid="vieja"))
+    await h.bus.wait_idle(2)
+    assert await h.pipeline.wait_idle(5)
+    assert h.tts.texts == ["Frase vieja 0."]

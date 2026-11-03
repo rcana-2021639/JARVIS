@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    },
+    "PrivacyMode": {
+      "description": "Modos de privacidad. Determinan si la cascada puede llegar al nivel 3.",
+      "enum": [
+        "HYBRID",
+        "LOCAL_ONLY",
+        "CLOUD_PREFERRED"
+      ],
+      "title": "PrivacyMode",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Una decision del enrutador. Viaja en `cognition.routed`.\n\nHay una por intento: si el nivel 2 duda y se escala, se publica otra con\n`attempt=2` y el motivo de la escalada.",
+  "properties": {
+    "attempt": {
+      "default": 1,
+      "description": "1 la primera vez; sube al escalar.",
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "description": "Interaccion.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "decided_at": {
+      "format": "date-time",
+      "title": "Decided At",
+      "type": "string"
+    },
+    "intent": {
+      "description": "Intencion clasificada.",
+      "minLength": 1,
+      "title": "Intent",
+      "type": "string"
+    },
+    "level": {
+      "$ref": "#/$defs/CascadeLevel",
+      "description": "Nivel elegido."
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Modelo concreto, si hay uno.",
+      "title": "Model"
+    },
+    "privacy_mode": {
+      "$ref": "#/$defs/PrivacyMode",
+      "description": "Modo vigente al decidir."
+    },
+    "reason": {
+      "description": "Motivo corto: patron, codigo, confianza...",
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "level",
+    "reason",
+    "intent",
+    "privacy_mode",
+    "correlation_id"
+  ],
+  "title": "RouteDecision",
+  "type": "object"
+}

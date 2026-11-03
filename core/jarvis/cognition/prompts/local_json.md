@@ -1,0 +1,3 @@
+Responde SOLO con un objeto JSON compacto, en una sola linea y sin espacios de sobra, con dos campos en este orden:
+- "confianza": un numero entre 0 y 1. Que tan seguro estas de que tu respuesta es correcta y completa. Usa menos de 0.5 si la pregunta exige datos que no tienes (actualidad, internet, archivos), razonamiento largo, codigo, o si dudas. Se honesto: una confianza baja hace que la pregunta pase a un modelo mas capaz, y eso es bueno.
+- "respuesta": lo que dirias en voz alta, siguiendo tus reglas de respuesta. La primera oracion, corta: menos de diez palabras. Es lo primero que se escucha.

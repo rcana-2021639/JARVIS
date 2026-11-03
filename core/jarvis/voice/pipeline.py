@@ -43,6 +43,7 @@ import asyncio
 import contextlib
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -51,6 +52,7 @@ import numpy as np
 
 from jarvis.config import VoiceConfig
 from jarvis.contracts.base import BaseContract, CorrelationId, new_correlation_id, utc_now
+from jarvis.contracts.cascade import ResponseChunk
 from jarvis.contracts.cognition import Response
 from jarvis.contracts.enums import CoreState, Emotion, EventType, Language, SpeechEndReason
 from jarvis.contracts.events import Event
@@ -83,6 +85,10 @@ _log = get_logger(__name__)
 #: Ganancia que lleva la energia RMS del habla a un rango util para el HUD.
 #: La voz de Piper ronda 0.1-0.25 de RMS; sin ganancia la esfera apenas latiria.
 _AMPLITUDE_GAIN = 3.0
+
+#: Interacciones viejas cuyo habla pendiente se descarta. Acotado: solo importan
+#: las ultimas, y un conjunto sin tope creceria mientras Jarvis viva.
+_SILENCED_MEMORY = 64
 
 #: Trozos de sintesis que pueden esperar a ser reproducidos. Piper produce una
 #: frase por trozo, asi que esto es "hasta cuatro frases por delante".
@@ -180,6 +186,8 @@ class VoicePipeline:
 
         self._stt_lock = asyncio.Lock()
         self._speak_lock = asyncio.Lock()
+        self._speak_waiting = 0
+        """Frases esperando turno: si hay, no se vuelve a DORMIDO entre una y otra."""
         self._not_listening = asyncio.Event()
         self._not_listening.set()
         self._idle = asyncio.Event()
@@ -187,7 +195,11 @@ class VoicePipeline:
 
         self._run_task: asyncio.Task[None] | None = None
         self._tasks: set[asyncio.Task[object]] = set()
-        self._subscription: Subscription | None = None
+        self._subscriptions: list[Subscription] = []
+        self._spoken_cids: set[CorrelationId] = set()
+        """Interacciones que ya mandaron algo a decir desde la ultima palabra clave."""
+        self._silenced: deque[CorrelationId] = deque(maxlen=_SILENCED_MEMORY)
+        """Interacciones superadas: lo que aun tengan por decir se descarta."""
         self._source_finished = asyncio.Event()
         self._stopping = False
 
@@ -210,20 +222,27 @@ class VoicePipeline:
         if self._run_task is not None:
             return
         if self._speak_responses:
-            self._subscription = self._bus.subscribe(
-                EventType.COGNITION_RESPONSE,
-                self._on_response,
-                name="voice.speak_responses",
-            )
+            self._subscriptions = [
+                self._bus.subscribe(
+                    EventType.COGNITION_RESPONSE,
+                    self._on_response,
+                    name="voice.speak_responses",
+                ),
+                self._bus.subscribe(
+                    EventType.COGNITION_RESPONSE_CHUNK,
+                    self._on_chunk,
+                    name="voice.speak_chunks",
+                ),
+            ]
         self._run_task = asyncio.create_task(self._run(), name="voice.pipeline")
         _log.info("voice.started", sample_rate=self._sample_rate, frame_ms=self._frame_ms)
 
     async def stop(self) -> None:
         """Detiene todo: escucha, habla y dispositivos."""
         self._stopping = True
-        if self._subscription is not None:
-            await self._subscription.unsubscribe()
-            self._subscription = None
+        for subscription in self._subscriptions:
+            await subscription.unsubscribe()
+        self._subscriptions = []
         await self._engines.source.close()
         if self._run_task is not None:
             self._run_task.cancel()
@@ -328,6 +347,10 @@ class VoicePipeline:
         barge_in = self._speaking is not None
         if barge_in:
             await self._interrupt_speech()
+        # Una orden nueva deja atras a las anteriores: lo que aun tuvieran
+        # pendiente de decir (frases en cola, respuestas tardias) ya no se dice.
+        self._silenced.extend(self._spoken_cids)
+        self._spoken_cids.clear()
 
         correlation_id = new_correlation_id()
         if self._correlation_token is not None:
@@ -576,8 +599,16 @@ class VoicePipeline:
         Si el usuario esta hablando, espera a que termine: Jarvis no habla
         encima de nadie. Varias llamadas seguidas se dicen en orden.
         """
+        self._speak_waiting += 1
+        self._idle.clear()
         async with self._speak_lock:
+            self._speak_waiting -= 1
             await self._not_listening.wait()
+            if correlation_id is not None and correlation_id in self._silenced:
+                self._refresh_idle()
+                return SpeechOutput(
+                    text=text, emotion=emotion, interrupted=True, correlation_id=correlation_id
+                )
             requested = time.perf_counter()
             tts = self._engines.tts
             session = _Speaking(
@@ -641,7 +672,7 @@ class VoicePipeline:
                 correlation_id=correlation_id,
             )
             await self._emit(EventType.VOICE_TTS_FINISHED, output, "voice.tts", correlation_id)
-            if self._state is CoreState.HABLANDO:
+            if self._state is CoreState.HABLANDO and self._speak_waiting == 0:
                 await self._set_state(CoreState.DORMIDO, "fin_respuesta", correlation_id)
             self._refresh_idle()
             return output
@@ -710,7 +741,11 @@ class VoicePipeline:
     async def _on_response(self, event: Event) -> None:
         """Dice en voz alta lo que la cascada cognitiva conteste."""
         response = event.payload_as(Response)
+        if response.streamed:
+            # Ya se dijo frase a frase por cognition.response.chunk.
+            return
         if response.should_speak and response.text:
+            self._spoken_cids.add(response.correlation_id)
             self._spawn(
                 self.speak(
                     response.text,
@@ -718,6 +753,20 @@ class VoicePipeline:
                     correlation_id=response.correlation_id,
                 )
             )
+
+    async def _on_chunk(self, event: Event) -> None:
+        """Dice una frase de una respuesta que todavia se esta generando.
+
+        `speak` las encola en orden por su candado: la segunda frase suena
+        cuando termina la primera, mientras el modelo sigue con la tercera.
+        """
+        chunk = event.payload_as(ResponseChunk)
+        if chunk.correlation_id in self._silenced:
+            return
+        self._spoken_cids.add(chunk.correlation_id)
+        self._spawn(
+            self.speak(chunk.text, emotion=chunk.emotion, correlation_id=chunk.correlation_id)
+        )
 
     # ------------------------------------------------------------------
     # Utilidades
@@ -735,7 +784,12 @@ class VoicePipeline:
         return task
 
     def _refresh_idle(self) -> None:
-        if self._listening is None and self._speaking is None and not self._pending:
+        if (
+            self._listening is None
+            and self._speaking is None
+            and not self._pending
+            and self._speak_waiting == 0
+        ):
             self._idle.set()
 
     async def _set_state(

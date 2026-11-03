@@ -227,6 +227,11 @@ class EventType(StrEnum):
     COGNITION_INTENT_CLASSIFIED = "cognition.intent.classified"
     COGNITION_ROUTED = "cognition.routed"
     COGNITION_RESPONSE = "cognition.response"
+    COGNITION_RESPONSE_CHUNK = "cognition.response.chunk"
+    """Una frase de la respuesta en cuanto existe. La voz la dice sin esperar al resto."""
+    COGNITION_COST_UPDATED = "cognition.cost.updated"
+    COGNITION_COMPLETED = "cognition.completed"
+    """Resumen de una interaccion: niveles probados, tiempos y costo."""
 
     # --- Memoria (Fase 3) --------------------------------------------------
     MEMORY_RECORD_STORED = "memory.record.stored"

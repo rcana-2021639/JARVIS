@@ -109,6 +109,13 @@ class Response(BaseContract):
         default_factory=list,
         description="Herramientas invocadas para producir esta respuesta.",
     )
+    streamed: bool = Field(
+        default=False,
+        description=(
+            "Si el texto ya se dijo trozo a trozo por `cognition.response.chunk`. "
+            "La voz no lo repite; el chat y la bitacora lo usan entero."
+        ),
+    )
     correlation_id: CorrelationId = Field(
         description="Interaccion a la que responde.",
     )

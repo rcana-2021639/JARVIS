@@ -1,13 +1,13 @@
-"""Habla con Jarvis por el microfono. La demostracion de la Fase 1.
+"""Habla con Jarvis por el microfono.
 
-Escucha la palabra clave, transcribe lo que digas y te lo repite en voz alta.
-Es un eco: entender y actuar es trabajo de la Fase 2. Lo que demuestra es el
-pipeline completo con hardware real -- microfono, palabra clave, VAD, Whisper,
-Piper, altavoces y barge-in -- y lo que publica al bus.
+Escucha la palabra clave, transcribe lo que digas, lo resuelve con la cascada
+cognitiva (Fase 2) y contesta en voz alta, frase a frase. Con `--echo` vuelve
+al comportamiento de la Fase 1: repetir lo que oyo, sin pensar.
 
 Uso:
 
     python scripts/voice_live.py                   # di "Hey Jarvis" y una orden
+    python scripts/voice_live.py --echo            # solo repetir (Fase 1)
     python scripts/voice_live.py --list-devices    # que microfonos ve PortAudio
     python scripts/voice_live.py --seconds 20      # se cierra solo
 
@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 
 from jarvis.bus import InMemoryEventBus, OverflowPolicy
+from jarvis.cognition import build_cascade
 from jarvis.config_watcher import ConfigManager
 from jarvis.contracts import (
     CascadeLevel,
@@ -61,6 +62,10 @@ def _print_event(event: Event) -> None:
         utterance = event.payload_as(Utterance)
         shown = utterance.text or "(nada)"
         print(f"  > {shown}   [{utterance.confidence:.2f}]")
+    elif kind is EventType.COGNITION_ROUTED:
+        print(f"  = nivel {event.payload.get('level')}  ({event.payload.get('reason')})")
+    elif kind is EventType.COGNITION_RESPONSE_CHUNK:
+        print(f"  < {event.payload.get('text')}")
     elif kind is EventType.CORE_ERROR:
         print(f"  ! error en {event.payload.get('module')}: {event.payload.get('detail')}")
 
@@ -91,7 +96,7 @@ async def run(args: argparse.Namespace) -> int:
         _print_event(event)
 
     async def echo(event: Event) -> None:
-        """El sustituto de la Fase 2: repetir lo que se oyo."""
+        """El comportamiento de la Fase 1: repetir lo que se oyo."""
         utterance = event.payload_as(Utterance)
         text = f"Escuche: {utterance.text}" if utterance.text else "Te escucho."
         response = Response(
@@ -105,7 +110,12 @@ async def run(args: argparse.Namespace) -> int:
         bind_bus(bus)
         await manager.start()
         bus.subscribe("*", show, name="console", max_queue=4096)
-        bus.subscribe(EventType.VOICE_STT_FINAL, echo, name="echo")
+        cascade = None
+        if args.echo:
+            bus.subscribe(EventType.VOICE_STT_FINAL, echo, name="echo")
+        else:
+            cascade = build_cascade(bus, lambda: manager.current)
+            await cascade.start()
         if args.verbose:
 
             async def meter(event: Event) -> None:
@@ -139,6 +149,8 @@ async def run(args: argparse.Namespace) -> int:
                 await pipeline.source_finished.wait()
         finally:
             await pipeline.stop()
+            if cascade is not None:
+                await cascade.stop()
             await manager.stop()
             bind_bus(None)
     return 0
@@ -149,6 +161,7 @@ def main() -> int:
     parser.add_argument("--list-devices", action="store_true", help="Listar dispositivos y salir.")
     parser.add_argument("--seconds", type=float, help="Cerrarse solo pasado este tiempo.")
     parser.add_argument("--verbose", action="store_true", help="Mostrar niveles y registro.")
+    parser.add_argument("--echo", action="store_true", help="Solo repetir lo que oye (Fase 1).")
     args = parser.parse_args()
 
     if args.list_devices:

@@ -5,7 +5,7 @@ en la PC, escucha por una palabra de activación, entiende lenguaje natural,
 opera el sistema operativo y las aplicaciones, recuerda todo lo que ha pasado, y
 se presenta a través de una interfaz tridimensional reactiva al sonido.
 
-Se construye en 13 fases. **Estado actual: Fase 1 completa.**
+Se construye en 13 fases. **Estado actual: Fase 2 completa.**
 
 ---
 
@@ -15,7 +15,7 @@ Se construye en 13 fases. **Estado actual: Fase 1 completa.**
 |---|------|--------|
 | 0 | Fundaciones y contratos | ✅ Completa |
 | 1 | Pipeline de voz | ✅ Completa |
-| 2 | Orquestador cognitivo | Pendiente |
+| 2 | Orquestador cognitivo | ✅ Completa |
 | 3 | Sistema de memoria | Pendiente |
 | 4 | Núcleo 3D | Pendiente |
 | 5 | HUD completo | Pendiente |
@@ -32,6 +32,20 @@ El detalle de lo entregado en cada fase está en [ESTADO.md](ESTADO.md).
 ---
 
 ## Qué hay hoy
+
+**Fase 2 — orquestador cognitivo** (`core/jarvis/cognition/`). Jarvis ya
+entiende y contesta. Cada orden pasa por un clasificador de intención (regex,
+difusa y MiniLM, en menos de 10 ms) y una cascada de tres niveles:
+
+| Nivel | Qué | Cuándo |
+|---|---|---|
+| 1 · Ruta rápida | Determinista, sin modelo, ~1 ms | Volumen, apps, hora, temporizadores, modo de privacidad… (34 órdenes) |
+| 2 · Modelo local | Ollama (`qwen3:4b`), con confianza propia | Conversación, consultas, redacción corta |
+| 3 · Claude | Haiku / Sonnet / Opus según la tarea, con costo | Código, tareas de muchos pasos, mucho contexto, o si el nivel 2 duda |
+
+Nunca se llama a la nube si el nivel inferior resuelve. Cada respuesta registra
+qué nivel la atendió, por qué, cuánto tardó y cuánto costó. Hay tope de gasto
+diario, modo solo-local y avisos honestos cuando algo no está disponible.
 
 **Fase 1 — pipeline de voz** (`core/jarvis/voice/`). Jarvis ya oye y habla:
 escucha la palabra clave, rescata el medio segundo previo del buffer circular,
@@ -72,15 +86,60 @@ PortAudio); sin él, el núcleo y sus pruebas siguen funcionando.
 Baja a `models/` (no versionado) el modelo de Whisper, la voz de Piper y la
 palabra clave. Jarvis nunca descarga nada por su cuenta.
 
+### Modelos de la cascada
+
+Instala [Ollama](https://ollama.com/download) y después:
+
+```bash
+.venv/Scripts/python -m pip install -e ".[dev,voice,cognition]"
+```
+
+```bash
+.venv/Scripts/python scripts/download_cognition_models.py
+```
+
+Baja el clasificador (MiniLM, 118 MB) a `models/intent/` y el modelo local con
+`ollama pull`.
+
+### Clave de la API de Claude (opcional)
+
+Sin clave, el nivel 3 queda fuera y Jarvis lo dice. Para activarlo:
+
+```bash
+.venv/Scripts/python scripts/set_secret.py anthropic_api_key
+```
+
+La clave se guarda en el Administrador de credenciales de Windows, nunca en un
+archivo.
+
 ### Hablar con Jarvis
+
+```bash
+.venv/Scripts/python scripts/jarvis_chat.py --voz
+```
+
+Escribes y Jarvis contesta en pantalla y por los altavoces; muestra qué nivel
+atendió cada orden. Sin `--voz`, solo texto.
+
+Con micrófono:
 
 ```bash
 .venv/Scripts/python scripts/voice_live.py
 ```
 
-Di **"Hey Jarvis"** —pronunciado a la inglesa, "DYAR-vis"— y una orden. Por
-ahora te la repite: entenderla es la Fase 2. Con `--list-devices` muestra qué
-micrófonos ve.
+Di **"Hey Jarvis"** —pronunciado a la inglesa, "DYAR-vis"— y una orden.
+`--echo` vuelve al eco de la Fase 1 y `--list-devices` muestra qué micrófonos
+ve.
+
+### Medir la cascada
+
+```bash
+.venv/Scripts/python scripts/cognition_bench.py
+```
+
+Clasifica y enruta 50 órdenes variadas y reporta la distribución por nivel.
+Con `--run` las ejecuta de verdad; `--privacy` verifica que en modo solo-local
+no sale tráfico y `--kill-ollama` mata Ollama a media respuesta.
 
 ### Medir el pipeline de voz
 
@@ -133,7 +192,7 @@ core/jarvis/     el cerebro y el cuerpo (Python)
   contracts/     modelos Pydantic -- el idioma común
   bus/           publicación/suscripción de eventos
   voice/         wake · vad · stt · tts · interrupción      (Fase 1) ✅
-  cognition/     router · cascada · prompts · confianza      (Fase 2)
+  cognition/     router · cascada · prompts · confianza      (Fase 2) ✅
   memory/        cinco capas · consolidación                 (Fase 3)
   tools/         servidores MCP                              (Fases 6-7)
   guardian/      permisos · confirmación · auditoría         (Fase 8)

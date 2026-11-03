@@ -128,6 +128,12 @@
       "title": "Should Speak",
       "type": "boolean"
     },
+    "streamed": {
+      "default": false,
+      "description": "Si el texto ya se dijo trozo a trozo por `cognition.response.chunk`. La voz no lo repite; el chat y la bitacora lo usan entero.",
+      "title": "Streamed",
+      "type": "boolean"
+    },
     "text": {
       "description": "El texto de la respuesta.",
       "title": "Text",

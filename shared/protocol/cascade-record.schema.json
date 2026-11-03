@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "El resumen de como se resolvio una orden. Viaja en `cognition.completed`.\n\nSe publica SIEMPRE, tambien cuando todo falla: una interaccion sin registro\nes una interaccion que la Fase 12 no puede aprender.",
+  "properties": {
+    "answer_confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Confianza propia del modelo que contesto. None en el nivel 1.",
+      "title": "Answer Confidence"
+    },
+    "classify_ms": {
+      "minimum": 0.0,
+      "title": "Classify Ms",
+      "type": "number"
+    },
+    "correlation_id": {
+      "description": "Interaccion.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "cost_usd": {
+      "default": 0.0,
+      "minimum": 0.0,
+      "title": "Cost Usd",
+      "type": "number"
+    },
+    "degraded": {
+      "default": false,
+      "description": "Si se respondio con menos de lo que pedia la orden (nube cortada o caida).",
+      "title": "Degraded",
+      "type": "boolean"
+    },
+    "finished_at": {
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "first_chunk_ms": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Desde que llego la orden hasta la primera frase hablable.",
+      "title": "First Chunk Ms"
+    },
+    "handled_by_level": {
+      "$ref": "#/$defs/CascadeLevel",
+      "description": "El nivel que dio la respuesta final."
+    },
+    "intent": {
+      "minLength": 1,
+      "title": "Intent",
+      "type": "string"
+    },
+    "intent_confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Intent Confidence",
+      "type": "number"
+    },
+    "levels_tried": {
+      "description": "En orden. [2, 3] es una escalada.",
+      "items": {
+        "$ref": "#/$defs/CascadeLevel"
+      },
+      "title": "Levels Tried",
+      "type": "array"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Modelo que contesto, si hubo.",
+      "title": "Model"
+    },
+    "reasons": {
+      "description": "Motivo de cada decision.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "suggested_level": {
+      "$ref": "#/$defs/CascadeLevel",
+      "description": "Lo que propuso el clasificador."
+    },
+    "text": {
+      "description": "Lo que el usuario dijo.",
+      "title": "Text",
+      "type": "string"
+    },
+    "total_ms": {
+      "minimum": 0.0,
+      "title": "Total Ms",
+      "type": "number"
+    }
+  },
+  "required": [
+    "text",
+    "intent",
+    "intent_confidence",
+    "suggested_level",
+    "handled_by_level",
+    "levels_tried",
+    "classify_ms",
+    "total_ms",
+    "correlation_id"
+  ],
+  "title": "CascadeRecord",
+  "type": "object"
+}

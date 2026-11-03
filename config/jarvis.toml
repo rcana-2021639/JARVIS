@@ -76,23 +76,71 @@ barge_in_enabled = true
 [cognition]
 privacy_mode = "HYBRID"       # HYBRID | LOCAL_ONLY | CLOUD_PREFERRED
 
-# Sin GPU dedicada, la tabla de VRAM del documento maestro manda Qwen3 4B en CPU
-# con escalado agresivo a la nube.
-local_model = "qwen3:4b"
-local_confidence_threshold = 0.7   # debajo de esto, escala al nivel 3
+# Clasificador: regex + difusa primero; si no hay coincidencia clara, MiniLM.
+# Bajalo con: python scripts/download_cognition_models.py
+classifier_engine = "embeddings"   # embeddings | patterns
+intent_model_dir = "models/intent"
+fuzzy_threshold = 86.0
+embedding_min_similarity = 0.55
+embedding_fast_similarity = 0.80
+fast_path_min_confidence = 0.75
+classifier_timeout_ms = 10
 
-cloud_model_light = "claude-haiku-4-5-20251001"
-cloud_model_standard = "claude-sonnet-5"
-cloud_model_deep = "claude-opus-5"
+# NIVEL 2 -- Ollama. Sin GPU dedicada, la tabla de VRAM del documento maestro
+# manda Qwen3 4B en CPU con escalado agresivo a la nube.
+ollama_url = "http://127.0.0.1:11434"
+local_model = "qwen3:4b"
+local_temperature = 0.4
+local_max_tokens = 160
+local_num_ctx = 4096
+local_keep_alive = "-1"       # el modelo nunca se descarga de la RAM
+local_timeout_s = 60.0        # en CPU, una llamada con herramientas no hace streaming
+# En CPU, qwen3:4b con herramientas escribe su razonamiento como texto y tarda
+# 40+ s. Apagado: las herramientas quedan para el nivel 3.
+local_tools = false
+local_confidence_threshold = 0.6   # debajo de esto, escala al nivel 3
+confidence_logprob_weight = 0.5
+confidence_stream_margin = 0.15    # holgura para hablar sin esperar a medir todo
+
+# NIVEL 3 -- API de Claude. La clave vive en el llavero de Windows:
+#   python scripts/set_secret.py anthropic_api_key
+cloud_model_light = "claude-haiku-5-5"
+cloud_model_standard = "claude-sonnet-5-5"
+cloud_model_deep = "claude-opus-5-5"    # solo si se pide explicito
+cloud_effort = "low"
+cloud_max_tokens = 2048
+cloud_timeout_s = 30.0
+cloud_retries = 3
+cloud_retry_base_s = 0.5
 
 # Tope diario. Al alcanzarlo Jarvis avisa por voz y degrada a solo-local en vez
 # de seguir cobrando. 0.50/dia son unos 15 al mes; el documento sugeria 10.
 daily_budget_usd = 0.50
+spend_ledger = "config/data/spend.json"
+
+fast_step_percent = 10        # paso de volumen y brillo sin numero
+spoken_max_sentences = 2      # lo que no cabe en dos frases va al chat
 
 max_context_tokens = 8000     # mas contexto que esto, escala al nivel 3
 max_chained_steps = 3         # mas pasos que esto, escala al nivel 3
-classifier_timeout_ms = 10
+local_context_tokens = 1500  # lo que ve el nivel 2; en CPU cada token cuesta
+cloud_context_tokens = 32000
+history_turns = 12
 max_tool_iterations = 8
+tool_timeout_s = 10.0
+
+# Precios en USD por millon de tokens, para el contador de gasto.
+[cognition.cloud_prices.claude-haiku-5-5]
+input_per_mtok = 0.10
+output_per_mtok = 0.50
+
+[cognition.cloud_prices.claude-sonnet-5-5]
+input_per_mtok = 2.00
+output_per_mtok = 10.00
+
+[cognition.cloud_prices.claude-opus-5-5]
+input_per_mtok = 4.00
+output_per_mtok = 20.00
 
 # -----------------------------------------------------------------------------
 # MEMORIA -- las cinco capas

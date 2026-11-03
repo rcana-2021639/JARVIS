@@ -1,0 +1,64 @@
+{
+  "$defs": {
+    "CascadeLevel": {
+      "description": "Los tres niveles de la cascada cognitiva.\n\nEs un IntEnum a proposito: el enrutador compara niveles con `<` y `>` para\ndecidir si escala, y el orden numerico es justo la semantica que queremos.",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "CascadeLevel",
+      "type": "integer"
+    },
+    "Emotion": {
+      "description": "Intencion expresiva de una respuesta hablada.\n\nDeliberadamente corta. La personalidad de Jarvis es seca y precisa: no hay\nentusiasmo ni servilismo que expresar, asi que no hay enum que lo soporte.",
+      "enum": [
+        "NEUTRAL",
+        "AFIRMATIVA",
+        "ALERTA",
+        "ERROR",
+        "INTERROGATIVA"
+      ],
+      "title": "Emotion",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Un trozo hablable de una respuesta que todavia se esta generando.\n\nViaja en `cognition.response.chunk`. El pipeline de voz los dice en orden\nconforme llegan: asi el primer audio sale antes de que el modelo termine.\nLa `Response` final de la misma interaccion llega con `streamed=True` y ya\nno se vuelve a decir.",
+  "properties": {
+    "correlation_id": {
+      "description": "Interaccion a la que pertenece.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "emotion": {
+      "$ref": "#/$defs/Emotion",
+      "default": "NEUTRAL"
+    },
+    "index": {
+      "description": "Orden del trozo dentro de la respuesta.",
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+    },
+    "level": {
+      "$ref": "#/$defs/CascadeLevel",
+      "description": "Nivel que lo esta generando."
+    },
+    "text": {
+      "description": "Una o mas frases completas.",
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text",
+    "index",
+    "level",
+    "correlation_id"
+  ],
+  "title": "ResponseChunk",
+  "type": "object"
+}

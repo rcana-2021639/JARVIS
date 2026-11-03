@@ -28,6 +28,7 @@ from jarvis.contracts.base import (
     new_id,
     utc_now,
 )
+from jarvis.contracts.cascade import CascadeRecord, CostUpdate, ResponseChunk, RouteDecision
 from jarvis.contracts.cognition import Command, Intent, Response
 from jarvis.contracts.enums import (
     CascadeLevel,
@@ -75,6 +76,11 @@ EXPORTED_CONTRACTS: tuple[type[BaseContract], ...] = (
     SpeechOutput,
     TtsAmplitude,
     StateChange,
+    # Fase 2: la contabilidad de la cascada.
+    ResponseChunk,
+    RouteDecision,
+    CostUpdate,
+    CascadeRecord,
 )
 
 __all__ = [
@@ -83,10 +89,12 @@ __all__ = [
     "AuditEntry",
     "BaseContract",
     "CascadeLevel",
+    "CascadeRecord",
     "Command",
     "CommandOrigin",
     "CoreState",
     "CorrelationId",
+    "CostUpdate",
     "Emotion",
     "Event",
     "EventType",
@@ -96,7 +104,9 @@ __all__ = [
     "MemoryRecord",
     "PrivacyMode",
     "Response",
+    "ResponseChunk",
     "RiskLevel",
+    "RouteDecision",
     "SpeechActivity",
     "SpeechEndReason",
     "SpeechOutput",
