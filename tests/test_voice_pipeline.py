@@ -579,7 +579,7 @@ async def test_una_orden_nueva_descarta_lo_pendiente_de_la_anterior(harness_fact
 async def test_la_transcripcion_no_queda_en_el_registro(harness_factory, monkeypatch) -> None:
     """Se espia el logger del pipeline: structlog cachea el suyo con el nivel de la
     primera configuracion, asi que leer un archivo dependeria del orden de las pruebas."""
-    import jarvis.voice.pipeline as pipeline_module
+    import jarvis.voice.transcription as transcription_module
 
     logged: list[dict[str, object]] = []
 
@@ -590,7 +590,7 @@ async def test_la_transcripcion_no_queda_en_el_registro(harness_factory, monkeyp
 
             return record
 
-    monkeypatch.setattr(pipeline_module, "_log", Spy())
+    monkeypatch.setattr(transcription_module, "_log", Spy())
     h = harness_factory(timeline(("silence", 300), ("wake", 300), ("speech", 600)))
     await h.run()
     assert h.of(EventType.VOICE_STT_FINAL)[0].payload_as(Utterance).text == "sube el volumen"

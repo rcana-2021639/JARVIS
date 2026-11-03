@@ -7,7 +7,10 @@
     io.py         fuente y salida sin hardware (pruebas y banco)
     models.py     donde viven los modelos y como se descargan
     factory.py    construye los motores reales desde la configuracion
-    pipeline.py   la maquina de estados que orquesta todo
+    runtime.py    estado compartido del pipeline y publicacion al bus
+    listening.py  captura, palabra clave, VAD y transcripcion
+    speaking.py   sintesis, amplitud y barge-in
+    pipeline.py   la fachada que une todo: VoicePipeline
     adapters/     PortAudio, openWakeWord, Silero, faster-whisper y Piper
 
 Uso tipico:

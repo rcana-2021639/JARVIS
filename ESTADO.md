@@ -123,7 +123,7 @@ Lo que queda a la vista, sin corregir:
 - **El sondeo de privacidad con `netstat` cada 250 ms podría perder una conexión de vida muy corta.** Por eso hay un segundo observador en asyncio, que ve todas las que pasan por el bucle.
 - **Ollama se instaló con winget** (0.40.13) y arranca con la sesión. `--kill-ollama` lo relanza con `ollama serve` desacoplado.
 - **Una orden nueva cancela la anterior.** "¿Qué hora es?" mientras el nivel 2 piensa en otra cosa la cancela. Es lo que se quiere casi siempre; si molesta, la Fase 12 puede distinguir órdenes rápidas que no interrumpen.
-- **`voice/pipeline.py` (Fase 1) tiene ~850 líneas**, el doble del tope de 400 del documento. Viene así desde su entrega. Partirlo (captura, escucha y habla) es trabajo de una sesión; conviene antes de que la Fase 4 lo toque para el núcleo 3D.
+- ~~`voice/pipeline.py` (Fase 1) tenía 852 líneas~~ — **resuelto**: se partió en `runtime.py` (estado compartido), `listening.py` (captura, palabra clave, VAD), `transcription.py` (Whisper), `speaking.py` (síntesis y barge-in) y `pipeline.py` (la fachada, misma API). El mayor tiene 315 líneas. Verificado sin cambio de comportamiento: las 298 pruebas y `voice_bench.py` con los modelos reales dan lo mismo que en la Fase 1 (6 de 6 palabras clave, WER 0.17, mismas transcripciones).
 - **Dos pruebas de la Fase 0 eran frágiles**: una de redondeo en `test_bus.py` (0.97799… contra 0.978) y la siguiente.
 - **Una prueba de tiempo de la Fase 0 era frágil en Windows** (`test_traced_mide_una_corrutina_y_publica_al_bus`): un `sleep(0.02)` midió 19.7 ms con la CPU ocupada. Se le dio margen (≥ 18 ms).
 
