@@ -413,7 +413,8 @@ async def test_metricas_registran_latencia_por_tipo(bus: InMemoryEventBus) -> No
     assert stats.samples == 10
     assert stats.mean_latency_ms >= 0
     assert stats.p95_latency_ms >= stats.p50_latency_ms
-    assert stats.max_latency_ms >= stats.mean_latency_ms
+    # La media se redondea y el maximo no: 0.97799... contra 0.978 fallaba a veces.
+    assert stats.max_latency_ms >= stats.mean_latency_ms - 1e-6
 
 
 async def test_wait_idle_devuelve_falso_si_vence_el_plazo(bus: InMemoryEventBus) -> None:

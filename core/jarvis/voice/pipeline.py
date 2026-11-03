@@ -65,7 +65,13 @@ from jarvis.contracts.voice import (
     Utterance,
     WakeDetection,
 )
-from jarvis.logging import clear_correlation_id, get_logger, set_correlation_id, traced
+from jarvis.logging import (
+    clear_correlation_id,
+    get_logger,
+    set_correlation_id,
+    traced,
+    user_text,
+)
 from jarvis.voice.audio import RingBuffer, frame_level
 from jarvis.voice.text import strip_wake_word
 from jarvis.voice.vad import EndpointDetector, EndpointEvent
@@ -581,7 +587,7 @@ class VoicePipeline:
         await self._emit(
             EventType.VOICE_STT_FINAL, utterance, "voice.stt", listening.correlation_id
         )
-        _log.info("voice.final", text=text, confidence=round(utterance.confidence, 3))
+        _log.info("voice.final", text=user_text(text), confidence=round(utterance.confidence, 3))
 
     # ------------------------------------------------------------------
     # Habla

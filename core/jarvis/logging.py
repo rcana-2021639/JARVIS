@@ -40,6 +40,7 @@ __all__ = [
     "get_logger",
     "set_correlation_id",
     "traced",
+    "user_text",
 ]
 
 P = ParamSpec("P")
@@ -58,6 +59,9 @@ _correlation_id: contextvars.ContextVar[CorrelationId | None] = contextvars.Cont
 _bus: EventBus | None = None
 
 _configured = False
+
+_log_user_content = False
+"""Si el registro puede guardar lo que dice el usuario. Ver `user_text`."""
 
 
 def set_correlation_id(correlation_id: CorrelationId) -> contextvars.Token[CorrelationId | None]:
@@ -111,6 +115,7 @@ def configure_logging(
     log_file: Path | None = None,
     max_bytes: int = 10 * 1024 * 1024,
     backup_count: int = 5,
+    log_user_content: bool = False,
 ) -> None:
     """Configura structlog para todo el proceso.
 
@@ -120,8 +125,11 @@ def configure_logging(
         log_file: si se indica, ademas escribe a archivo con rotacion.
         max_bytes: tamano al que rota el archivo.
         backup_count: cuantos archivos rotados se conservan.
+        log_user_content: si el registro guarda lo que dice el usuario. Apagado,
+            `user_text` lo reemplaza por su longitud.
     """
-    global _configured
+    global _configured, _log_user_content
+    _log_user_content = log_user_content
 
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
@@ -156,6 +164,21 @@ def configure_logging(
         cache_logger_on_first_use=True,
     )
     _configured = True
+
+
+def user_text(text: str | None) -> str:
+    """Lo que el usuario dijo, listo para el registro.
+
+    DECISION: por defecto el registro guarda `<N caracteres>`, no el contenido.
+    El archivo de registro vive en texto plano en el disco y rota durante
+    semanas: guardar ahi cada orden seria un diario de la vida del usuario sin
+    cifrar. La memoria (Fase 3) y la auditoria (Fase 8) tienen su propio
+    almacenamiento, con sus propias reglas. Para depurar,
+    `log_user_content = true` en jarvis.toml.
+    """
+    if text is None:
+        return "<nada>"
+    return text if _log_user_content else f"<{len(text)} caracteres>"
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

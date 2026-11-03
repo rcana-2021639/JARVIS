@@ -311,6 +311,14 @@ class CognitionConfig(_Section):
         le=1.0,
         description="Confianza del clasificador por debajo de la cual el nivel 1 no se arriesga.",
     )
+    max_input_chars: int = Field(
+        default=2000,
+        gt=0,
+        description=(
+            "Orden mas larga que se acepta. Lo que pase se rechaza antes de "
+            "clasificar: un texto enorme pegado iria entero a la nube y costaria."
+        ),
+    )
     classifier_timeout_ms: int = Field(
         default=10,
         gt=0,
@@ -622,6 +630,13 @@ class JarvisConfig(BaseSettings):
     log_file: Path | None = Field(
         default=Path("logs/jarvis.log"),
         description="Archivo de registro con rotacion. None desactiva el archivo.",
+    )
+    log_user_content: bool = Field(
+        default=False,
+        description=(
+            "Si el registro guarda lo que dice el usuario. Apagado escribe solo la "
+            "longitud: el archivo de registro no esta cifrado."
+        ),
     )
 
     voice: VoiceConfig = Field(default_factory=VoiceConfig)

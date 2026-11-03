@@ -472,3 +472,19 @@ async def test_lo_que_se_dijo_antes_del_corte_va_antes_del_aviso(bus):
     rig = build(bus, local=local, cloud=FakeCloud())
     response = await rig.orchestrator.handle_text("¿Qué opinas del mar?")
     assert response.text == "Uno dos tres. Perdí la conexión con el modelo local."
+
+
+async def test_una_orden_enorme_se_rechaza_sin_llamar_a_ningun_modelo(bus, capture):
+    rig = build(bus, local=FakeLocal(), cloud=FakeCloud(), max_input_chars=100)
+    huge = "refactoriza este codigo " * 1000
+    started = time.perf_counter()
+    response = await rig.orchestrator.handle_text(huge)
+    assert (time.perf_counter() - started) * 1000 < 100
+    await capture.settle()
+    assert rig.local.requests == [] and rig.cloud.requests == []
+    assert response.emotion is Emotion.ERROR
+    assert "demasiado largo" in response.text
+    record = capture.record()
+    assert "entrada_demasiado_larga" in record.reasons
+    assert len(record.text) == 100  # al registro no va el texto entero
+    assert not capture.of(EventType.COGNITION_INTENT_CLASSIFIED)

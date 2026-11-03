@@ -13,31 +13,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from jarvis.contracts.base import new_id
-from jarvis.logging import get_logger
+from jarvis.logging import get_logger, user_text
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-__all__ = ["Timer", "TimerService", "spoken_duration"]
+__all__ = ["Timer", "TimerService"]
 
 _log = get_logger(__name__)
-
-
-def spoken_duration(seconds: float) -> str:
-    """Una duracion como se dice: "5 minutos", "1 hora y 10 minutos", "30 segundos"."""
-    total = max(0, round(seconds))
-    hours, rest = divmod(total, 3600)
-    minutes, secs = divmod(rest, 60)
-    parts: list[str] = []
-    if hours:
-        parts.append(f"{hours} hora" + ("s" if hours != 1 else ""))
-    if minutes:
-        parts.append(f"{minutes} minuto" + ("s" if minutes != 1 else ""))
-    if secs and not hours:
-        parts.append(f"{secs} segundo" + ("s" if secs != 1 else ""))
-    if not parts:
-        return "0 segundos"
-    return " y ".join(parts) if len(parts) <= 2 else f"{parts[0]}, {parts[1]} y {parts[2]}"
 
 
 @dataclass(slots=True, eq=False)
@@ -73,7 +56,7 @@ class TimerService:
         timer = Timer(seconds=seconds, label=label, deadline=time.monotonic() + seconds)
         timer.task = asyncio.create_task(self._run(timer), name=f"timer.{timer.timer_id[:8]}")
         self._timers[timer.timer_id] = timer
-        _log.info("timer.started", seconds=seconds, label=label)
+        _log.info("timer.started", seconds=seconds, label=user_text(label))
         return timer
 
     def cancel_all(self) -> int:
@@ -97,7 +80,7 @@ class TimerService:
         except asyncio.CancelledError:
             return
         self._timers.pop(timer.timer_id, None)
-        _log.info("timer.fired", seconds=timer.seconds, label=timer.label)
+        _log.info("timer.fired", seconds=timer.seconds, label=user_text(timer.label))
         try:
             await self._announce(timer)
         except Exception:

@@ -15,15 +15,20 @@ devuelve que decir. Hay dos clases de manejador:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from jarvis.cognition.demo_tools import safe_arithmetic
-from jarvis.cognition.timers import spoken_duration
+from jarvis.cognition.spoken import (
+    spoken_date,
+    spoken_duration,
+    spoken_number,
+    spoken_time,
+)
 from jarvis.contracts.enums import Emotion, PrivacyMode
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from datetime import datetime
 
     from jarvis.cognition.catalog import Entities
     from jarvis.cognition.phrases import PhrasePicker
@@ -32,21 +37,7 @@ if TYPE_CHECKING:
     from jarvis.contracts.cognition import Intent
     from jarvis.contracts.tools import ToolCall
 
-__all__ = [
-    "CascadeControl",
-    "FastContext",
-    "FastOutcome",
-    "FastPath",
-    "spoken_date",
-    "spoken_number",
-    "spoken_time",
-]
-
-_WEEKDAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
-_MONTHS = (
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-)  # fmt: skip
+__all__ = ["CascadeControl", "FastContext", "FastOutcome", "FastPath"]
 
 
 class CascadeControl(Protocol):
@@ -104,33 +95,6 @@ class FastContext:
 
 
 Handler = "Callable[[Entities, FastContext], Awaitable[FastOutcome]]"
-
-
-def spoken_time(moment: datetime) -> str:
-    """La hora como se dice: "Son las 3 y 25 de la tarde"."""
-    hour = moment.hour % 12 or 12
-    minutes = moment.minute
-    head = "Es la 1" if hour == 1 else f"Son las {hour}"
-    tail = " en punto" if minutes == 0 else f" y {minutes}"
-    period = (
-        "de la madrugada" if moment.hour < 6
-        else "de la mañana" if moment.hour < 12
-        else "de la tarde" if moment.hour < 20
-        else "de la noche"
-    )  # fmt: skip
-    return f"{head}{tail} {period}."
-
-
-def spoken_date(moment: datetime) -> str:
-    """La fecha como se dice: "Hoy es lunes 2 de noviembre"."""
-    return f"Hoy es {_WEEKDAYS[moment.weekday()]} {moment.day} de {_MONTHS[moment.month - 1]}."
-
-
-def spoken_number(value: float) -> str:
-    """Un numero como se dice: enteros sin decimales, coma decimal, sin ceros de sobra."""
-    if abs(value - round(value)) < 1e-9:
-        return str(round(value))
-    return f"{value:.4f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
 def _capitalized(text: str) -> str:

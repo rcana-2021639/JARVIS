@@ -74,7 +74,11 @@ async def run(args: argparse.Namespace) -> int:
     bus = InMemoryEventBus()
     manager = ConfigManager(bus=bus)
     config = manager.current
-    configure_logging(level="WARNING" if not args.verbose else "INFO", development=True)
+    configure_logging(
+        level="WARNING" if not args.verbose else "INFO",
+        development=True,
+        log_user_content=config.log_user_content,
+    )
 
     try:
         engines = build_engines(config.voice)

@@ -243,3 +243,16 @@ async def test_traced_puede_no_publicar(bus: InMemoryEventBus) -> None:
     await operacion()
     await bus.wait_idle(timeout=1.0)
     assert recibidos == []
+
+
+def test_lo_que_dice_el_usuario_no_va_al_registro_por_defecto() -> None:
+    from jarvis.logging import user_text
+
+    configure_logging(level="WARNING", log_file=None)
+    assert user_text("mi contraseña del banco es 1234") == "<31 caracteres>"
+    assert user_text(None) == "<nada>"
+    configure_logging(level="WARNING", log_file=None, log_user_content=True)
+    try:
+        assert user_text("hola") == "hola"
+    finally:
+        configure_logging(level="WARNING", log_file=None)

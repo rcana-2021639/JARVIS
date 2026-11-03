@@ -24,13 +24,19 @@ from typing import TYPE_CHECKING, Any
 
 from jarvis.cognition.context import ContextBuilder, ConversationHistory, Turn
 from jarvis.cognition.control import SessionControl
-from jarvis.cognition.fastpath import FastContext, FastPath, spoken_date
+from jarvis.cognition.fastpath import FastContext, FastPath
 from jarvis.cognition.levels import Attempt, Interaction, LevelRunner
 from jarvis.cognition.phrases import PhrasePicker
 from jarvis.cognition.prompts import system_prompt
-from jarvis.cognition.reporting import CascadePublisher, build_record, build_response
+from jarvis.cognition.reporting import (
+    CascadePublisher,
+    build_record,
+    build_response,
+    timer_response,
+)
 from jarvis.cognition.router import Route, Router, profile_task
 from jarvis.cognition.speaker import ResponseStream
+from jarvis.cognition.spoken import local_now, spoken_date
 from jarvis.cognition.timers import TimerService
 from jarvis.cognition.tool_loop import ToolLoop, ToolRegistry
 from jarvis.contracts.base import new_correlation_id
@@ -214,48 +220,59 @@ class CognitiveOrchestrator:
             self._publish_chunk, cid, max_sentences=cfg.spoken_max_sentences, started=started
         )
         attempt = Attempt(level=CascadeLevel.FAST_PATH)
+        logged = text[: cfg.max_input_chars]  # al historial y al registro, nunca mas
         intent: Intent | None = None
         classify_ms = 0.0
         try:
             await self._out.state(CoreState.DORMIDO, CoreState.PENSANDO, "orden", cid)
-            classification = self._classifier.classify(text)
-            intent, classify_ms = classification.intent, classification.elapsed_ms
-            await self._out.emit(EventType.COGNITION_INTENT_CLASSIFIED, intent, cid)
-            local_ctx = self._build(text, structured=True, budget=cfg.local_context_tokens)
-            blocker = self._control.cloud_blocker()
-            route = self._router.decide(
-                intent,
-                profile_task(text, local_ctx.tokens),
-                privacy=self._privacy.mode,
-                cloud_blocker=blocker,
-                fast_path_handles=self._fast.handles(intent.name),
-            )
-            interaction = Interaction(
-                text=text,
-                intent=intent,
-                correlation_id=cid,
-                stream=stream,
-                attempt=attempt,
-                local_context=lambda: local_ctx,
-                cloud_context=lambda: self._build(
-                    text, structured=False, budget=cfg.cloud_context_tokens
-                ),
-                cloud_blocker=self._control.cloud_blocker,
-            )
-            await self._publish_route(route, interaction)
-            if route.level is CascadeLevel.FAST_PATH:
-                await self._run_fast(interaction, route, cancelled_previous)
-            elif route.level is CascadeLevel.LOCAL_LLM:
-                await self._runner.run_local(interaction, route)
+            if len(text) > cfg.max_input_chars:
+                # Se rechaza antes de clasificar: ni regex sobre un texto enorme,
+                # ni contexto gigante, ni costo en la nube.
+                attempt.reasons.append("entrada_demasiado_larga")
+                attempt.emotion = Emotion.ERROR
+                attempt.text = (
+                    f"Eso es demasiado largo para una orden: {len(text)} caracteres, "
+                    f"y el tope es {cfg.max_input_chars}."
+                )
             else:
-                await self._runner.run_cloud(interaction, route)
+                classification = self._classifier.classify(text)
+                intent, classify_ms = classification.intent, classification.elapsed_ms
+                await self._out.emit(EventType.COGNITION_INTENT_CLASSIFIED, intent, cid)
+                local_ctx = self._build(text, structured=True, budget=cfg.local_context_tokens)
+                blocker = self._control.cloud_blocker()
+                route = self._router.decide(
+                    intent,
+                    profile_task(text, local_ctx.tokens),
+                    privacy=self._privacy.mode,
+                    cloud_blocker=blocker,
+                    fast_path_handles=self._fast.handles(intent.name),
+                )
+                interaction = Interaction(
+                    text=text,
+                    intent=intent,
+                    correlation_id=cid,
+                    stream=stream,
+                    attempt=attempt,
+                    local_context=lambda: local_ctx,
+                    cloud_context=lambda: self._build(
+                        text, structured=False, budget=cfg.cloud_context_tokens
+                    ),
+                    cloud_blocker=self._control.cloud_blocker,
+                )
+                await self._publish_route(route, interaction)
+                if route.level is CascadeLevel.FAST_PATH:
+                    await self._run_fast(interaction, route, cancelled_previous)
+                elif route.level is CascadeLevel.LOCAL_LLM:
+                    await self._runner.run_local(interaction, route)
+                else:
+                    await self._runner.run_cloud(interaction, route)
             if self._budget_notice_pending:
                 self._budget_notice_pending = False
                 await stream.notice(_BUDGET_NOTICE, Emotion.ALERTA)
         except asyncio.CancelledError:
             attempt.reasons.append("cancelada")
             attempt.should_speak = False
-            await self._finish(text, intent, attempt, stream, cid, started, classify_ms)
+            await self._finish(logged, intent, attempt, stream, cid, started, classify_ms)
             clear_correlation_id(token)
             raise
         except Exception as error:
@@ -264,14 +281,14 @@ class CognitiveOrchestrator:
             attempt.text = "Algo falló al procesar eso. Quedó en el registro."
             attempt.emotion = Emotion.ERROR
             attempt.reasons.append(f"error: {type(error).__name__}")
-        response = await self._finish(text, intent, attempt, stream, cid, started, classify_ms)
+        response = await self._finish(logged, intent, attempt, stream, cid, started, classify_ms)
         clear_correlation_id(token)
         return response
 
     async def _run_fast(self, it: Interaction, route: Route, cancelled_previous: bool) -> None:
         it.attempt.levels.append(CascadeLevel.FAST_PATH)
         it.attempt.reasons.append(route.reason)
-        now = self._clock() if self._clock else _local_now()
+        now = self._clock() if self._clock else local_now()
         outcome = await self._fast.execute(
             it.intent,
             FastContext(
@@ -332,7 +349,7 @@ class CognitiveOrchestrator:
     # ------------------------------------------------------------------
 
     def _build(self, text: str, *, structured: bool, budget: int) -> BuiltContext:
-        now = self._clock() if self._clock else _local_now()
+        now = self._clock() if self._clock else local_now()
         # DECISION: el nivel 2 no recibe estado. Medido: qwen3:4b lo repetia en
         # voz alta ("Modo HYBRID activado", "Hoy es lunes... 20:26"). Fecha y
         # hora las contesta el nivel 1; la nube si las recibe.
@@ -354,25 +371,11 @@ class CognitiveOrchestrator:
             self._budget_notice_pending = True
 
     async def _announce_timer(self, timer: Timer) -> None:
-        key, values = (
-            ("timer_done_label", {"label": timer.label}) if timer.label else ("timer_done", {})
-        )
-        cid = new_correlation_id()
-        response = Response(
-            text=self._phrases.pick(key, **values),
-            emotion=Emotion.ALERTA,
-            handled_by_level=CascadeLevel.FAST_PATH,
-            correlation_id=cid,
-        )
-        await self._out.emit(EventType.COGNITION_RESPONSE, response, cid)
+        response = timer_response(timer, self._phrases, new_correlation_id())
+        await self._out.emit(EventType.COGNITION_RESPONSE, response, response.correlation_id)
 
     async def _publish_route(self, route: Route, it: Interaction) -> None:
-        model = None
-        if route.level is CascadeLevel.LOCAL_LLM and self._local is not None:
-            model = self._local.model
-        elif route.level is CascadeLevel.CLOUD_LLM and self._cloud is not None:
-            model_for = getattr(self._cloud, "model_for", None)
-            model = model_for(route.complexity) if callable(model_for) else None
+        model = self._control.model_for(route)
         await self._out.route(route, it, model=model, privacy=self._privacy.mode)
 
     async def _publish_chunk(self, chunk: ResponseChunk) -> None:
@@ -392,9 +395,3 @@ class CognitiveOrchestrator:
         task: asyncio.Task[object] = asyncio.create_task(coroutine)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-
-
-def _local_now() -> datetime:
-    from datetime import datetime
-
-    return datetime.now().astimezone()

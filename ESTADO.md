@@ -45,7 +45,7 @@ Fecha: 2026-11-02
 - `scripts/set_secret.py` — guarda la clave de la API en el llavero
 - `scripts/voice_live.py` — ahora contesta con la cascada; `--echo` conserva el eco de la Fase 1
 
-**Pruebas** — 295 en total (114 nuevas). `test_cognition_units.py` (49) cubre texto, clasificador, streaming, gasto, enrutador y contexto; `test_cognition_clients.py` (23) los clientes de Ollama y Claude contra un transporte y un SDK simulados, y el bucle de herramientas; `test_cognition_cascade.py` (30) los criterios de aceptación sobre el bus con falsos deterministas (`tests/cognition_fakes.py`); `test_cognition_models.py` (6) MiniLM y Ollama reales, y se salta sola si faltan.
+**Pruebas** — 298 en total (117 nuevas). `test_cognition_units.py` (49) cubre texto, clasificador, streaming, gasto, enrutador y contexto; `test_cognition_clients.py` (23) los clientes de Ollama y Claude contra un transporte y un SDK simulados, y el bucle de herramientas; `test_cognition_cascade.py` (31) los criterios de aceptación sobre el bus con falsos deterministas (`tests/cognition_fakes.py`); `test_cognition_models.py` (6) MiniLM y Ollama reales, y se salta sola si faltan.
 
 ### Mediciones — i5-10500 sin GPU, `qwen3:4b` en Ollama 0.40, sin clave de la API
 
@@ -74,8 +74,8 @@ Cómo se llegó de 29 s a 7.4 s en la primera frase del nivel 2, todo medido con
 - [x] Al llegar al límite diario, degrada y avisa en vez de seguir gastando (`test_al_llegar_al_limite_avisa_y_degrada`). El acumulado se persiste: reiniciar no regala presupuesto.
 - [x] Un banco corre 50 órdenes variadas y reporta la distribución por nivel — `scripts/cognition_bench.py`: 52 / 34 / 14.
 - [x] Apagar Ollama a mitad de una respuesta no crashea nada — verificado en vivo con `--kill-ollama` (mata el servidor tras la primera frase) y en pruebas (`test_apagar_ollama_a_mitad_de_respuesta_no_crashea`).
-- [x] `mypy core/ --strict` limpio (75 archivos), `ruff check core/ tests/ scripts/` limpio, `pytest` verde (295), esquemas al día (23).
-- [x] Ningún archivo pasa de 400 líneas: `orchestrator.py` se partió en `control.py` y `reporting.py`.
+- [x] `mypy core/ --strict` limpio (76 archivos), `ruff check core/ tests/ scripts/` limpio, `pytest` verde (298), esquemas al día (23).
+- [x] Ningún archivo de `cognition/` pasa de 400 líneas: `orchestrator.py` se partió en `control.py`, `reporting.py` y `spoken.py`.
 
 ### Decisiones tomadas
 
@@ -97,6 +97,21 @@ Cómo se llegó de 29 s a 7.4 s en la primera frase del nivel 2, todo medido con
 - **DECISIÓN**: lo que no cabe en dos frases no se dice: se habla lo primero y "El resto está en el chat". Los bloques de código nunca se dicen.
 - **DECISIÓN**: `phrases.py` tutea, igual que la personalidad. Nada de exclamaciones ni de "¡Claro que sí!"; hay una prueba que lo verifica.
 
+### Revisión de seguridad (2026-11-02, después del cierre)
+
+Se probó lo delicado de las fases 0-2. Lo que se corrigió:
+
+- **Lo que dice el usuario ya no va al registro.** `voice.final` y las etiquetas de los temporizadores escribían el texto tal cual en `logs/jarvis.log`, que es texto plano y rota durante semanas. Ahora `jarvis.logging.user_text()` escribe `<N caracteres>`. Para depurar: `log_user_content = true` en `jarvis.toml`. Prueba: `test_la_transcripcion_no_queda_en_el_registro`.
+- **Tope de largo de una orden** (`max_input_chars = 2000`). Un texto enorme iba entero a la nube (contexto > 8k → nivel 3) y costaba. Ahora se rechaza antes de clasificar, sin llamar a ningún modelo, y al registro va recortado. Prueba: `test_una_orden_enorme_se_rechaza_sin_llamar_a_ningun_modelo`.
+
+Lo que se probó y está bien: ninguna regex del catálogo se dispara con entradas largas o patológicas (20 000 palabras: 0.3 s, ahora rechazadas antes); la calculadora rechaza `9**9**9`, desbordes, división por cero y cualquier cosa que no sea aritmética; `format_exc_info` no vuelca variables locales en las excepciones; no hay secretos en el repositorio.
+
+Lo que queda a la vista, sin corregir:
+
+- **El repositorio es público** y muestra el nombre del usuario (`user_name` en `jarvis.toml`) y su correo en los commits.
+- **Desde la Fase 6 los modelos podrán actuar sobre la PC.** Contenido de archivos o páginas web puede traer instrucciones escondidas (inyección de prompt). El Guardián (Fase 8) debería existir antes de dar herramientas que escriban, borren o envíen algo.
+- **Ollama escucha en 127.0.0.1 sin autenticación**: cualquier programa local puede usarlo. Es su comportamiento estándar.
+
 ### Deuda técnica y pendientes
 
 - **La meta de < 1 s del nivel 2 no se alcanza en CPU.** qwen3:4b genera a 5–7 tokens/s: solo el prefijo del JSON (`{"confianza": 0.9, "respuesta": "`) son ~2 s, y una primera frase corta otros 2–4. Opciones, de menor a mayor esfuerzo: (1) **poner la clave de la API** y `privacy_mode = "CLOUD_PREFERRED"`: Haiku 5.5 sin razonamiento debería contestar en torno a 1 s (no medido: no hay clave), y es lo que la tabla de VRAM del documento manda para máquinas sin GPU ("nube agresiva"); (2) `ollama pull qwen3:1.7b` y `local_model = "qwen3:1.7b"`: más rápido, peor criterio (no medido: no se bajó sin permiso); (3) una GPU dedicada.
@@ -108,6 +123,8 @@ Cómo se llegó de 29 s a 7.4 s en la primera frase del nivel 2, todo medido con
 - **El sondeo de privacidad con `netstat` cada 250 ms podría perder una conexión de vida muy corta.** Por eso hay un segundo observador en asyncio, que ve todas las que pasan por el bucle.
 - **Ollama se instaló con winget** (0.40.13) y arranca con la sesión. `--kill-ollama` lo relanza con `ollama serve` desacoplado.
 - **Una orden nueva cancela la anterior.** "¿Qué hora es?" mientras el nivel 2 piensa en otra cosa la cancela. Es lo que se quiere casi siempre; si molesta, la Fase 12 puede distinguir órdenes rápidas que no interrumpen.
+- **`voice/pipeline.py` (Fase 1) tiene ~850 líneas**, el doble del tope de 400 del documento. Viene así desde su entrega. Partirlo (captura, escucha y habla) es trabajo de una sesión; conviene antes de que la Fase 4 lo toque para el núcleo 3D.
+- **Dos pruebas de la Fase 0 eran frágiles**: una de redondeo en `test_bus.py` (0.97799… contra 0.978) y la siguiente.
 - **Una prueba de tiempo de la Fase 0 era frágil en Windows** (`test_traced_mide_una_corrutina_y_publica_al_bus`): un `sleep(0.02)` midió 19.7 ms con la CPU ocupada. Se le dio margen (≥ 18 ms).
 
 ### Para la Fase 3 — Sistema de memoria

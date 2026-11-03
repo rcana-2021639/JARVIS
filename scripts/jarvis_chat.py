@@ -89,7 +89,12 @@ async def _speaker(bus: InMemoryEventBus, manager: ConfigManager) -> VoicePipeli
 async def run(args: argparse.Namespace) -> int:
     bus = InMemoryEventBus()
     manager = ConfigManager(bus=bus)
-    configure_logging(level="WARNING", development=True, log_file=None)
+    configure_logging(
+        level="WARNING",
+        development=True,
+        log_file=None,
+        log_user_content=manager.current.log_user_content,
+    )
     routes: list[RouteDecision] = []
     records: list[CascadeRecord] = []
 

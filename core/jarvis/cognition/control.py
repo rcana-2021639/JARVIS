@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from jarvis.contracts.enums import CascadeLevel
 from jarvis.logging import get_logger
 
 if TYPE_CHECKING:
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from jarvis.cognition.budget import SpendLedger
     from jarvis.cognition.levels import CloudModel
     from jarvis.cognition.llm import LocalModel
-    from jarvis.cognition.router import PrivacySwitch
+    from jarvis.cognition.router import PrivacySwitch, Route
     from jarvis.contracts.enums import PrivacyMode
 
 __all__ = ["SessionControl"]
@@ -72,6 +73,15 @@ class SessionControl:
         if self.cloud is None:
             return "no hay cliente de la nube"
         return self.cloud.unavailable_reason()
+
+    def model_for(self, route: Route) -> str | None:
+        """Que modelo concreto atiende una ruta, para el registro."""
+        if route.level is CascadeLevel.LOCAL_LLM and self._local is not None:
+            return self._local.model
+        if route.level is CascadeLevel.CLOUD_LLM and self.cloud is not None:
+            model_for = getattr(self.cloud, "model_for", None)
+            return model_for(route.complexity) if callable(model_for) else None
+        return None
 
     async def health(self) -> str:
         """Estado de los niveles 2 y 3 en una frase."""

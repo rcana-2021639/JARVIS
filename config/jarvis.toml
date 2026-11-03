@@ -16,6 +16,9 @@ user_name = "Rhandy"
 log_level = "INFO"
 development = true
 log_file = "logs/jarvis.log"
+# El registro no esta cifrado: por defecto guarda la longitud de lo que dices,
+# no el contenido. Activalo solo para depurar.
+log_user_content = false
 
 # -----------------------------------------------------------------------------
 # VOZ
@@ -85,6 +88,7 @@ embedding_min_similarity = 0.55
 embedding_fast_similarity = 0.80
 fast_path_min_confidence = 0.75
 classifier_timeout_ms = 10
+max_input_chars = 2000        # mas largo se rechaza sin llamar a ningun modelo
 
 # NIVEL 2 -- Ollama. Sin GPU dedicada, la tabla de VRAM del documento maestro
 # manda Qwen3 4B en CPU con escalado agresivo a la nube.

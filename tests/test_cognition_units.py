@@ -12,14 +12,14 @@ from jarvis.cognition.budget import SpendLedger, cost_usd
 from jarvis.cognition.catalog import build_catalog
 from jarvis.cognition.classifier import IntentClassifier, strip_fillers
 from jarvis.cognition.context import ContextBuilder, ConversationHistory, Turn, estimate_tokens
-from jarvis.cognition.fastpath import FastPath, spoken_date, spoken_time
+from jarvis.cognition.fastpath import FastPath
 from jarvis.cognition.llm import Complexity, GateDecision
 from jarvis.cognition.local_llm import combine_confidence
 from jarvis.cognition.phrases import PHRASES, PhrasePicker
 from jarvis.cognition.router import PrivacySwitch, Router, profile_task
+from jarvis.cognition.spoken import spoken_date, spoken_duration, spoken_time
 from jarvis.cognition.streaming import SentenceChunker, StructuredStream
 from jarvis.cognition.text import duration_seconds, normalize
-from jarvis.cognition.timers import spoken_duration
 from jarvis.config import CognitionConfig, ModelPrice
 from jarvis.contracts import CascadeLevel, Intent, PrivacyMode
 from tests.cognition_fakes import FakeEmbedder

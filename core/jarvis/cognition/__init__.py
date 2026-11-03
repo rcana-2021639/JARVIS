@@ -9,6 +9,7 @@
     fastpath.py      el nivel 1: manejadores deterministas
     phrases.py       confirmaciones variadas que rotan
     timers.py        temporizadores en proceso
+    spoken.py        horas, fechas, duraciones y numeros como se dicen
     llm.py           la interfaz comun de los niveles 2 y 3
     local_llm.py     el nivel 2: Ollama con confianza propia
     cloud_llm.py     el nivel 3: la API de Claude con costo y tope diario

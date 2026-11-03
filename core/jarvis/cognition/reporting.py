@@ -11,20 +11,22 @@ from typing import TYPE_CHECKING
 
 from jarvis.contracts.cascade import CascadeRecord, RouteDecision
 from jarvis.contracts.cognition import Response
-from jarvis.contracts.enums import CascadeLevel, CoreState, EventType
+from jarvis.contracts.enums import CascadeLevel, CoreState, Emotion, EventType
 from jarvis.contracts.events import Event
 from jarvis.contracts.system import StateChange
 
 if TYPE_CHECKING:
     from jarvis.bus.base import EventBus
     from jarvis.cognition.levels import Attempt, Interaction
+    from jarvis.cognition.phrases import PhrasePicker
     from jarvis.cognition.router import Route
     from jarvis.cognition.speaker import ResponseStream
+    from jarvis.cognition.timers import Timer
     from jarvis.contracts.base import BaseContract
     from jarvis.contracts.cognition import Intent
     from jarvis.contracts.enums import PrivacyMode
 
-__all__ = ["CascadePublisher", "build_record", "build_response"]
+__all__ = ["CascadePublisher", "build_record", "build_response", "timer_response"]
 
 SOURCE = "cognition.orchestrator"
 
@@ -117,5 +119,19 @@ def build_record(
         total_ms=round((time.perf_counter() - started) * 1000.0, 1),
         cost_usd=attempt.cost_usd,
         degraded=attempt.degraded,
+        correlation_id=cid,
+    )
+
+
+def timer_response(timer: Timer, phrases: PhrasePicker, cid: str) -> Response:
+    """El aviso de un temporizador que vencio. Es una interaccion nueva, sin orden."""
+    if timer.label:
+        text = phrases.pick("timer_done_label", label=timer.label)
+    else:
+        text = phrases.pick("timer_done")
+    return Response(
+        text=text,
+        emotion=Emotion.ALERTA,
+        handled_by_level=CascadeLevel.FAST_PATH,
         correlation_id=cid,
     )

@@ -28,8 +28,7 @@ def test_los_esquemas_en_disco_estan_al_dia() -> None:
     """Si esta falla, corre: python scripts/export_schemas.py"""
     stale = check_schemas()
     assert not stale, (
-        f"Esquemas desactualizados: {stale}. Regenera con "
-        f"'python scripts/export_schemas.py'."
+        f"Esquemas desactualizados: {stale}. Regenera con 'python scripts/export_schemas.py'."
     )
 
 
@@ -65,9 +64,12 @@ def test_cada_esquema_es_json_valido_y_declara_su_version(contrato: type) -> Non
     """Un esquema sin `$schema` no lo puede consumir un generador de tipos."""
     nombre = contrato.__name__
     archivo = next(
-        path for path in PROTOCOL_DIR.glob("*.schema.json") if json.loads(
+        path
+        for path in PROTOCOL_DIR.glob("*.schema.json")
+        if json.loads(
             path.read_text(encoding="utf-8"),
-        ).get("title") == nombre
+        ).get("title")
+        == nombre
     )
     datos = json.loads(archivo.read_text(encoding="utf-8"))
     assert datos["$schema"].startswith("https://json-schema.org/")

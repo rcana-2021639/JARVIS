@@ -1,7 +1,7 @@
 """La cascada con sus modelos reales. Se salta sola si faltan.
 
-    MiniLM     python scripts/download_cognition_models.py
-    Ollama     instalado, corriendo y con el modelo de `local_model`
+MiniLM     python scripts/download_cognition_models.py
+Ollama     instalado, corriendo y con el modelo de `local_model`
 """
 
 from __future__ import annotations
