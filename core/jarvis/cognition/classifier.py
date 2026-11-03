@@ -7,6 +7,10 @@
 
 Si tampoco (b) se parece a nada, la orden es charla libre para el nivel 2.
 
+Antes de todo se consultan las rutinas aprendidas (Fase 3): una orden que la
+memoria procedimental promovio se reconoce por su forma exacta y va directo
+al nivel 1. Es un diccionario: no cuesta nada.
+
 El clasificador no decide el nivel: lo sugiere. El enrutador tiene la ultima
 palabra y puede escalar por complejidad, privacidad o presupuesto.
 """
@@ -45,7 +49,7 @@ FALLBACK_INTENT = "chat.free"
 _PATTERN_CONFIDENCE = 0.97
 _FALLBACK_CONFIDENCE = 0.5
 
-Stage = Literal["pattern", "fuzzy", "embedding", "fallback"]
+Stage = Literal["routine", "pattern", "fuzzy", "embedding", "fallback"]
 
 _LEADING_FILLERS = re.compile(
     r"^(?:(?:oye|oiga|hey|jarvis|yarvis|por favor|porfa|a ver|bueno|ok|okay|eh)\s+)+"
@@ -124,6 +128,15 @@ class IntentClassifier:
         self._matrix: NDArray[np.float32] | None = None
         if embedder is not None:
             self._matrix = cached_embeddings(embedder, texts, cache_dir)
+        self._routines: dict[str, str] = {}
+
+    def add_routine(self, trigger: str, intent_name: str) -> None:
+        """Reconoce una orden exacta como una rutina aprendida (intencion dinamica)."""
+        self._routines[strip_fillers(normalize(trigger))] = intent_name
+
+    def remove_routine(self, intent_name: str) -> None:
+        """Deja de reconocer una rutina."""
+        self._routines = {k: v for k, v in self._routines.items() if v != intent_name}
 
     @property
     def example_texts(self) -> tuple[str, ...]:
@@ -159,6 +172,11 @@ class IntentClassifier:
     def _classify(self, text: str) -> tuple[Intent, Stage]:
         if not text:
             return self._make(self._by_name[FALLBACK_INTENT], text, None, 0.0), "fallback"
+        routine = self._routines.get(text)
+        if routine is not None:
+            return Intent(
+                name=routine, confidence=1.0, suggested_level=CascadeLevel.FAST_PATH
+            ), "routine"
         cfg = self._config()
 
         for item in self._catalog:

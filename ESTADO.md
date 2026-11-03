@@ -4,6 +4,131 @@ Bitácora de fases. Cada sesión lee este archivo antes de escribir una sola lí
 
 ---
 
+## FASE 3 — SISTEMA DE MEMORIA — **COMPLETA**
+
+Fecha: 2026-11-03
+
+### Entregado
+
+**Las cinco capas** — `core/jarvis/memory/`
+
+| Archivo | Qué contiene |
+|---|---|
+| `store.py` | SQLite (`config/data/memory.db`) con FTS5 y migraciones versionadas con `PRAGMA user_version`; LanceDB (`config/data/vectors/`) como índice vectorial de los hechos |
+| `working.py` | **Trabajo**: últimos 20 turnos + foto del sistema (estado del núcleo, última interacción; ventana activa y lo que suena quedan para la Fase 6). Solo RAM. Reemplaza al historial de la Fase 2 |
+| `episodic.py` | **Episódica**: cada turno, acción, error y resumen con fecha. BM25 con FTS5, rangos de fechas, compresión por día de lo que pasa de 90 días |
+| `semantic.py` | **Semántica**: hechos con importancia y decaimiento por vida media; nuevo / duplicado (se refuerza) / actualizado (el viejo queda obsoleto y apunta al nuevo) |
+| `graph.py` | **Grafo**: entidades (persona, proyecto, archivo, app, sitio, lugar…) y relaciones tipadas; recorrido en anchura a N saltos, camino más corto, búsqueda difusa por nombre |
+| `procedural.py` | **Procedimental**: secuencias de herramientas por orden; 3 éxitos → rutina activa que el clasificador reconoce y el nivel 1 ejecuta sin modelo. Dos fallos seguidos la retiran |
+| `retrieval.py` | **Recuperación híbrida**: vectorial + BM25 + grafo en paralelo, recencia con peso temporal, Reciprocal Rank Fusion, reorden por peso efectivo, presupuesto de tokens y plazo duro |
+| `extraction.py` | De episodios a hechos/entidades/relaciones: reglas (siempre) + modelo local con esquema JSON |
+| `consolidation.py` | El ciclo nocturno completo y su programador (hora configurable, recuperación de noches perdidas, cede Ollama si el usuario está hablando) |
+| `recorder.py` | Del bus a la memoria: `cognition.response` + `tool.call.finished` + `cognition.completed` → turno, acciones y patrón procedimental; `core.error` → episodio de error |
+| `handlers.py`, `periods.py` | El control por voz (nivel 1) y los periodos hablados ("ayer", "el martes", "anoche") |
+| `tools.py` | `recordar`, `guardar_hecho`, `olvidar`, `listar_entidades`, `relacionar`, `linea_de_tiempo` en el `ToolRegistry`, con forma de herramienta MCP |
+| `service.py`, `factory.py` | `MemorySystem` (la fachada) y `build_assistant` (cascada + memoria conectadas, compartiendo la sesión de MiniLM) |
+| `simulation.py` | Una semana simulada de un usuario ficticio (100 turnos) para probar la consolidación |
+
+**En la cascada** — `cognition/planner.py` (enrutar + recuperar + armar contexto, sacado del orquestador para que no pase de 400 líneas), `cognition/confirm.py` (confirmaciones habladas con plazo), `cognition/intents_memory.py` (7 intenciones nuevas de nivel 1: las 5 de memoria, "sí" y "no"), el clasificador reconoce rutinas aprendidas antes que los patrones, `prompts/memory_extract.md` (el prompt de la consolidación) y `prompts/jarvis.md` ya no dice que no tiene memoria.
+
+**Contrato nuevo** — `ConsolidationReport`, en `memory.consolidation.finished`. Exportado a `shared/protocol/` (24 archivos).
+
+**Voz**
+
+- "Jarvis, recuerda que [X]" → guarda con importancia 0.9, en segunda persona: "Anotado: tu hermana se llama Ana."
+- "Jarvis, olvida lo de [X]" → "Tengo 3 recuerdos sobre X. ¿Lo olvido? Di: Jarvis, sí." Solo un "sí" dentro de 15 s borra; "no", "cancela" o el plazo vencido no tocan nada.
+- "Jarvis, qué sabes de [X]" → grafo a 2 saltos + hechos.
+- "Jarvis, qué hicimos ayer" → línea de tiempo episódica (también "el martes", "esta semana", "anoche"…).
+- "Jarvis, qué aprendiste anoche" → el reporte de la última consolidación.
+
+**Scripts** — `scripts/memory_inspect.py`: registros por capa, hechos por importancia, grafo en texto, rutinas, prueba de recuperación con latencias (`--query`), banco con N registros (`--bench`), consolidación ya (`--consolidate`) y la semana simulada (`--simulate`). `jarvis_chat.py` y `voice_live.py` ahora arrancan con memoria (`--sin-memoria` en el chat vuelve a la Fase 2).
+
+**Dependencias** — `lancedb` 0.41 y `pyarrow` (instalados con permiso del usuario). SQLite con FTS5 viene con Python.
+
+**Pruebas** — 360 en total (52 nuevas). `test_memory_layers.py` (26) prueba cada capa contra SQLite y LanceDB reales en carpetas temporales; `test_memory_system.py` (26) prueba los siete criterios de punta a punta sobre el bus, con la cascada falsa de la Fase 2 y la memoria real.
+
+### Mediciones — i5-10500 sin GPU
+
+| Medida | Resultado | Meta | |
+|---|---|---|---|
+| Recuperación híbrida, 10.000 hechos + 10.000 episodios, MiniLM real (`memory_inspect.py --bench 10000`) | **p50 26 ms, p95 30 ms**, máx 34 ms | < 100 ms | ✅ |
+| — de eso, la búsqueda vectorial (embedding de la consulta + LanceDB exacto) | p50 26 ms | | es lo que manda |
+| — BM25 sobre hechos y episodios | p50 7 ms | | en paralelo |
+| — grafo | p50 3 ms | | en paralelo |
+| Codificar 10.000 hechos con MiniLM (128 tokens) | 60 s | | solo en el banco |
+| Consolidación de 100 episodios simulados con `qwen3:4b` (`memory_inspect.py --simulate`) | **998 s** (16,6 min, ~21 llamadas) | trabajo nocturno | ✅ |
+| — lo que aprendió | 29 hechos, 17 entidades, 16 relaciones, 2 rutinas propuestas | | ver abajo |
+| Prueba real de punta a punta (MiniLM + Ollama): "recuerda que mi hermana se llama Ana" y luego "¿cómo se llama mi hermana?" | nivel 1 en 35-250 ms; nivel 2 contesta "Ana." en 5,1 s | | ✅ |
+
+Lo que salió de la corrida real, sin maquillar: aprendió todo lo esperado (hermana Ana, perro Toby, jefe Carlos, proyecto Aurora, Guadalajara, María → Aurora → informe.docx y el hábito del clima), pero qwen3:4b también guardó ruido: cultura general ("la capital de Mongolia es Ulán Bator"), respuestas de Jarvis ("Rust es un lenguaje sólido"), una orden ("Pon un temporizador") y **un hecho inventado** ("No te gusta el café"). Después de esa corrida se agregó un filtro: del modelo solo se guardan hechos que hablan de "tú…" o nombran a alguien del mundo del usuario (`extraction.about_user`). Eso elimina la cultura general, las respuestas y las órdenes; **no** elimina una invención bien redactada en segunda persona. También se corrigió que "Rhandy" quedara como dos entidades (una "cosa" y una "persona": ahora se promueve) y "concentrarme" → "concentrarte".
+
+La prueba real también encontró dos fallos que los falsos no veían, ya corregidos: MiniLM clasificaba "¿cómo se llama mi hermana?" como "recuerda que…" (por parecido con sus ejemplos) y contestaba "¿Qué quieres que recuerde?"; y "qué sabes de Toby" decía "Rhandy perro Toby". Ahora "recuerda que" y "olvida lo de" solo se activan por patrón, y las relaciones familiares se leen "Toby es perro de Rhandy".
+
+### Criterios de aceptación
+
+- [x] Decir un hecho y preguntarlo tres días después (con fecha simulada) lo recupera correctamente — `test_un_hecho_dicho_se_recupera_tres_dias_despues`: se guarda por nivel 1, el reloj avanza 3 días, "¿Cómo se llama mi hermana?" va al nivel 2 con "Tu hermana se llama Ana." en "Lo que recuerdas", y "¿Qué sabes de mi hermana?" lo dice por nivel 1.
+- [x] La recuperación híbrida tarda menos de 100 ms con 10.000 registros — 26 ms p50 con el modelo real y 20.000 registros (`memory_inspect.py --bench 10000`); `test_la_recuperacion_tarda_menos_de_100_ms_con_10000_registros` lo vigila en cada corrida.
+- [x] La consolidación corre sobre 100 episodios simulados y produce hechos y entidades coherentes — `test_la_consolidacion_de_100_episodios_produce_hechos_y_entidades` (7 hechos esperados, 7 entidades, María → Aurora → informe.docx, la rutina del clima propuesta, nada se consolida dos veces) y con Ollama real en `--simulate` (arriba).
+- [x] Repetir una misma secuencia de acciones 3 veces genera una rutina automática, verificable en la tabla procedimental — `test_tres_repeticiones_generan_una_rutina_de_ruta_rapida`: `action_patterns.successes = 3`, la rutina aparece en `routines`, y la cuarta vez la orden va por nivel 1, ejecuta la herramienta y no toca ningún modelo. Una repetición fallida no cuenta.
+- [x] "Jarvis, olvida X" pide confirmación y luego X ya no se recupera — `test_olvidar_pide_confirmacion_y_despues_no_se_recupera` y `test_decir_no_o_dejar_pasar_el_plazo_no_borra_nada`.
+- [x] El grafo responde correctamente a una consulta de dos saltos — `test_el_grafo_responde_una_consulta_de_dos_saltos`.
+- [x] Reiniciar el proceso conserva absolutamente todo — `test_reiniciar_conserva_absolutamente_todo`: hechos, episodios, entidades, relaciones, patrones, rutinas (que vuelven a la ruta rápida al conectar) y el reporte de consolidación. La memoria de trabajo se vacía, como pide el documento.
+- [x] `mypy core/ --strict` limpio (101 archivos), `ruff check core/ tests/ scripts/` limpio, `pytest` verde (360), esquemas al día (24). Ningún archivo pasa de 400 líneas (el mayor de `memory/`: 367).
+
+### Decisiones tomadas
+
+- **DECISIÓN**: embeddings con el **mismo MiniLM multilingüe** del clasificador y no bge-m3 (lo eligió el usuario). Sin GPU, bge-m3 tarda 100-200 ms por consulta: solo él rompería la meta. Se comparte la sesión de ONNX con truncados distintos (32 tokens para órdenes, 128 para hechos): cero descargas y 118 MB menos de RAM.
+- **DECISIÓN**: SQLite es la fuente de verdad de los hechos y LanceDB solo su índice (id + vector), **porque** el decaimiento nocturno es un UPDATE barato que no reescribe la tabla de vectores, y si cambia el modelo el índice se reconstruye solo desde SQLite al arrancar.
+- **DECISIÓN**: búsqueda vectorial exacta, sin índice ANN: con 10.000 hechos son ~25 ms y no se equivoca. Un IVF necesita miles de filas para entrenarse y se desactualiza con cada hecho nuevo.
+- **DECISIÓN**: la recencia solo **reordena**; no aporta candidatos propios. Si los aportara, cada consulta arrastraría lo último que se dijo, venga o no al caso (y eso ya está en la memoria de trabajo).
+- **DECISIÓN**: sin re-ordenamiento con un modelo cruzado: en esta CPU son 200-400 ms sobre 20 candidatos. El documento lo deja opcional.
+- **DECISIÓN**: si una búsqueda se pasa del plazo (100 ms), se fusiona lo que llegó y se registra. Un recuerdo a tiempo vale más que el perfecto tarde.
+- **DECISIÓN**: solo se recupera memoria si la orden va a un modelo (niveles 2 y 3). El nivel 1 no lee contexto. Se recupera una vez con el presupuesto del nivel 3 (1500 tokens) y se recorta para el 2 (300), así una escalada no repite la búsqueda.
+- **DECISIÓN**: los hechos se guardan en **segunda persona** ("Tu hermana se llama Ana"): guardados como los dijo el usuario ("mi hermana…"), el modelo los lee como si fueran de Jarvis.
+- **DECISIÓN**: un hecho "cambió" si comparte sujeto y verbo con uno vigente ("tu hermana se llama …"). Un parecido vectorial alto no basta: "tu hermana se llama Ana" y "tu hermano se llama Luis" se parecen mucho y no se reemplazan.
+- **DECISIÓN**: olvidar borra de verdad (hechos, episodios que lo mencionan, la entidad y los turnos en RAM), y el turno "olvida lo de X" se guarda **sin su texto**; la confirmación tampoco repite el tema. Si no, X se seguiría encontrando justo después de olvidarlo.
+- **DECISIÓN**: una sola acción pendiente de confirmación a la vez, con plazo (`guardian.confirmation_timeout_s`, 15 s); "cancela" también la descarta. El Guardián de la Fase 8 generaliza esto.
+- **DECISIÓN**: la memoria procedimental solo aprende secuencias que eligió un **modelo** (niveles 2 y 3). Las del nivel 1 ya son rutas rápidas.
+- **DECISIÓN**: la consolidación **propone** rutinas por hábito —la misma orden a un modelo, en una ventana de 2 horas, en al menos 3 días y en el 75 % de los días en que se pidió— y no por repetición: "qué clima hace" cada mañana es un hábito; "cuéntame un chiste" diez veces a cualquier hora no. Las propuestas no se ejecutan solas.
+- **DECISIÓN**: la consolidación corre siempre las reglas además del modelo local: lo explícito ("recuerda que…") no depende de que un 4B lo entienda. Si Ollama falla, sigue solo con reglas y lo anota en el reporte.
+- **DECISIÓN**: la consolidación **cede Ollama** si hubo una orden en los últimos 2 minutos (`consolidation_idle_minutes`): Ollama atiende una petición a la vez y un tramo tarda decenas de segundos; la orden del usuario esperaría detrás.
+- **DECISIÓN**: "reporta al arrancar qué aprendió anoche" = el reporte se publica en `memory.consolidation.finished` al arrancar si nadie lo oyó (el HUD lo mostrará), se escribe en el registro y lo imprime `jarvis_chat.py`. Jarvis **no lo dice en voz alta sin que se lo pidan**: hablar solo al arrancar contradice que sin "Jarvis" no pasa nada. Por voz: "Jarvis, qué aprendiste anoche".
+- **DECISIÓN**: los episodios viejos se comprimen en uno por día (una línea por turno; los errores se descartan): se siguen encontrando por palabra y por fecha.
+
+### Deuda técnica y pendientes
+
+- **La memoria está en texto plano en `config/data/`.** La episódica guarda todo lo dicho, como pide el documento. No está cifrada (la bóveda es de la Fase 8) y no se versiona (`.gitignore`). Respaldarla es copiar la carpeta.
+- **En modo HYBRID, los recuerdos recuperados viajan a la nube** como parte del contexto del nivel 3 (hasta 1500 tokens). Es como funciona el diseño; en LOCAL_ONLY nada sale.
+- **El modelo local inventa a veces al consolidar.** El filtro quita lo que no es del usuario, pero un 4B puede escribir "No te gusta el café" sin que nadie lo dijera. Con clave de la API, la consolidación podría usar Haiku (nocturna, barata); hoy es local por regla del documento. Los hechos de la consolidación entran con la importancia que propone el modelo y decaen si nadie los usa.
+- **Consolidar en esta CPU tarda ~10 s por episodio** (16,6 min los 100). De noche no importa; la recuperación de noches perdidas al arrancar cede Ollama si el usuario está hablando.
+- **Las reglas de extracción entienden frases típicas** ("mi X se llama Y", "X trabaja en Y", "vivo en", "me gusta", "odio"). Lo demás depende del modelo local en la consolidación nocturna.
+- **"Aurora" y "Proyecto Aurora" pueden quedar como dos entidades** si se mencionan de las dos formas. `find` tolera errores de transcripción, pero no fusiona entidades. Fusionarlas es trabajo de una consolidación más lista (Fase 12).
+- **La búsqueda vectorial es exacta y lineal**: ~25 ms con 10.000 hechos, ~250 ms con 100.000. Si se llega ahí, crear un índice IVF-PQ en LanceDB y medir.
+- **Sin clave de la API, las herramientas de memoria solo las usa el nivel 3** (`local_tools = false` en esta CPU). Las órdenes de voz de memoria no las necesitan: son de nivel 1.
+- **Las intenciones de memoria solo existen con la memoria conectada.** Con `--sin-memoria` el nivel 1 no las conoce y van al nivel 2.
+- **`fastpath.py` quedó en 399 líneas** (con "sí" y "no"). El próximo manejador nativo que se agregue obliga a partirlo.
+
+### Para la Fase 4 — Núcleo 3D
+
+- **El HUD necesita un canal local**: hoy todo vive en el bus en proceso. La Fase 4 pide un WebSocket del núcleo al HUD con amplitud y 32 bandas de FFT. El bus ya publica `voice.level` (~30 Hz, RMS y pico del micrófono) y `voice.tts.amplitude` (60 Hz); faltan las bandas y el servidor (en `127.0.0.1`, no el puente remoto de la Fase 9).
+- **El estado del núcleo** sale en `core.state.changed` (`StateChange`), con los 8 estados del documento. `CONFIRMANDO` todavía no lo publica nadie: lo publicará el Guardián (Fase 8); la confirmación de "olvida X" de esta fase se resuelve en la conversación.
+- **La carga cognitiva** para los filamentos puede salir de `cognition.routed` (nivel elegido) y de cuánto lleva en PENSANDO.
+- Los esquemas para TypeScript están en `shared/protocol/` (24).
+
+```bash
+.venv/Scripts/python -m pip install -e ".[dev,voice,cognition]"
+```
+
+```bash
+.venv/Scripts/python scripts/memory_inspect.py --bench 10000
+```
+
+```bash
+.venv/Scripts/python scripts/jarvis_chat.py
+```
+
+---
+
 ## FASE 2 — ORQUESTADOR COGNITIVO — **COMPLETA** (con dos criterios pendientes: la latencia del nivel 2 en esta CPU y el costo real sin clave de la API)
 
 Fecha: 2026-11-02

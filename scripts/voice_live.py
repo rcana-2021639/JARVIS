@@ -26,7 +26,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 
 from jarvis.bus import InMemoryEventBus, OverflowPolicy
-from jarvis.cognition import build_cascade
 from jarvis.config_watcher import ConfigManager
 from jarvis.contracts import (
     CascadeLevel,
@@ -39,6 +38,7 @@ from jarvis.contracts import (
     WakeDetection,
 )
 from jarvis.logging import bind_bus, configure_logging
+from jarvis.memory import build_assistant
 from jarvis.voice import VoicePipeline
 from jarvis.voice.factory import build_engines
 from jarvis.voice.models import ModelMissingError
@@ -115,10 +115,12 @@ async def run(args: argparse.Namespace) -> int:
         await manager.start()
         bus.subscribe("*", show, name="console", max_queue=4096)
         cascade = None
+        memory = None
         if args.echo:
             bus.subscribe(EventType.VOICE_STT_FINAL, echo, name="echo")
         else:
-            cascade = build_cascade(bus, lambda: manager.current)
+            cascade, memory = build_assistant(bus, lambda: manager.current)
+            await memory.start()
             await cascade.start()
         if args.verbose:
 
@@ -155,6 +157,9 @@ async def run(args: argparse.Namespace) -> int:
             await pipeline.stop()
             if cascade is not None:
                 await cascade.stop()
+            if memory is not None:
+                await memory.stop()
+                memory.close()
             await manager.stop()
             bind_bus(None)
     return 0

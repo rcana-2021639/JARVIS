@@ -12,6 +12,7 @@ entre "pon algo de musica" y "reproduce una cancion".
 
 from __future__ import annotations
 
+import copy
 import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -72,8 +73,14 @@ class Embedder(Protocol):
 class OnnxEmbedder:
     """MiniLM en onnxruntime, con media de tokens como en sentence-transformers."""
 
-    def __init__(self, model_dir: Path) -> None:
-        """Carga el modelo y el tokenizador. Lanza si falta alguno."""
+    def __init__(self, model_dir: Path, max_tokens: int = _MAX_TOKENS) -> None:
+        """Carga el modelo y el tokenizador. Lanza si falta alguno.
+
+        Args:
+            model_dir: carpeta con `model.onnx` y `tokenizer.json`.
+            max_tokens: donde se trunca cada frase. 32 para ordenes; la memoria
+                usa mas, porque un hecho dice lo importante al final.
+        """
         import onnxruntime as ort
         from tokenizers import Tokenizer
 
@@ -84,7 +91,7 @@ class OnnxEmbedder:
                 raise EmbeddingModelMissingError(path)
 
         self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
-        self._tokenizer.enable_truncation(_MAX_TOKENS)
+        self._tokenizer.enable_truncation(max_tokens)
         self._tokenizer.enable_padding()
         options = ort.SessionOptions()
         options.intra_op_num_threads = _THREADS
@@ -95,7 +102,21 @@ class OnnxEmbedder:
             node.name == "token_type_ids" for node in self._session.get_inputs()
         )
         stat = model_path.stat()
-        self._identity = f"{model_path.name}:{stat.st_size}:{_MAX_TOKENS}"
+        self._identity = f"{model_path.name}:{stat.st_size}:{max_tokens}"
+
+    def with_max_tokens(self, max_tokens: int) -> OnnxEmbedder:
+        """Otra vista del mismo modelo con otro truncado, sin cargarlo dos veces.
+
+        DECISION: la memoria y el clasificador comparten la sesion de ONNX. Son
+        118 MB de pesos; cargarlos dos veces no compra nada.
+        """
+        from tokenizers import Tokenizer
+
+        twin = copy.copy(self)
+        twin._tokenizer = Tokenizer.from_str(self._tokenizer.to_str())
+        twin._tokenizer.enable_truncation(max_tokens)
+        twin._identity = self._identity.rsplit(":", 1)[0] + f":{max_tokens}"
+        return twin
 
     @property
     def identity(self) -> str:

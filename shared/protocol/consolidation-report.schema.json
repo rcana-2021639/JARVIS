@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Lo que aprendio una consolidacion nocturna. Viaja en `memory.consolidation.finished`.\n\nSe publica al terminar y otra vez al arrancar si nadie lo ha oido todavia:\n\"Jarvis reporta al arrancar que aprendio anoche\".",
+  "properties": {
+    "compressed": {
+      "default": 0,
+      "description": "Episodios viejos comprimidos.",
+      "minimum": 0,
+      "title": "Compressed",
+      "type": "integer"
+    },
+    "conversations": {
+      "default": 0,
+      "description": "Conversaciones en que se agruparon.",
+      "minimum": 0,
+      "title": "Conversations",
+      "type": "integer"
+    },
+    "decayed": {
+      "default": 0,
+      "description": "Hechos cuyo peso bajo por desuso.",
+      "minimum": 0,
+      "title": "Decayed",
+      "type": "integer"
+    },
+    "entities_new": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Entities New",
+      "type": "integer"
+    },
+    "episodes": {
+      "default": 0,
+      "description": "Episodios leidos.",
+      "minimum": 0,
+      "title": "Episodes",
+      "type": "integer"
+    },
+    "errors": {
+      "description": "Lo que fallo, sin detenerse.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Errors",
+      "type": "array"
+    },
+    "extractor": {
+      "description": "Quien extrajo: 'modelo local' o 'reglas'.",
+      "title": "Extractor",
+      "type": "string"
+    },
+    "facts_new": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Facts New",
+      "type": "integer"
+    },
+    "facts_reinforced": {
+      "default": 0,
+      "description": "Hechos que ya se sabian.",
+      "minimum": 0,
+      "title": "Facts Reinforced",
+      "type": "integer"
+    },
+    "facts_updated": {
+      "default": 0,
+      "description": "Hechos que reemplazaron a otros.",
+      "minimum": 0,
+      "title": "Facts Updated",
+      "type": "integer"
+    },
+    "finished_at": {
+      "description": "Cuando termino.",
+      "format": "date-time",
+      "title": "Finished At",
+      "type": "string"
+    },
+    "learned": {
+      "description": "Los hechos nuevos, en texto, para decirlos.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Learned",
+      "type": "array"
+    },
+    "relations_new": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Relations New",
+      "type": "integer"
+    },
+    "routines_proposed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Routines Proposed",
+      "type": "integer"
+    },
+    "started_at": {
+      "description": "Cuando empezo.",
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "summaries": {
+      "default": 0,
+      "description": "Conversaciones largas resumidas.",
+      "minimum": 0,
+      "title": "Summaries",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "started_at",
+    "finished_at",
+    "extractor"
+  ],
+  "title": "ConsolidationReport",
+  "type": "object"
+}

@@ -5,10 +5,11 @@ Escucha `voice.stt.final` (o recibe texto por `handle_text`) y por cada orden:
     1. publica PENSANDO
     2. clasifica                       -> cognition.intent.classified
     3. enruta                          -> cognition.routed
-    4. resuelve en el nivel elegido, hablando frase a frase
+    4. si va a un modelo, recupera de la memoria lo que viene al caso
+    5. resuelve en el nivel elegido, hablando frase a frase
                                        -> cognition.response.chunk
-    5. responde                        -> cognition.response
-    6. registra niveles, tiempos, costo -> cognition.completed
+    6. responde                        -> cognition.response
+    7. registra niveles, tiempos, costo -> cognition.completed
 
 DECISION: una orden a la vez. Si llega otra mientras la anterior sigue
 pensando, la anterior se cancela: el usuario ya paso a otra cosa, y dos
@@ -22,11 +23,13 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
-from jarvis.cognition.context import ContextBuilder, ConversationHistory, Turn
+from jarvis.cognition.confirm import PendingConfirmations
+from jarvis.cognition.context import ConversationHistory, PromptAssembler, Turn
 from jarvis.cognition.control import SessionControl
 from jarvis.cognition.fastpath import FastContext, FastPath
 from jarvis.cognition.levels import Attempt, Interaction, LevelRunner
 from jarvis.cognition.phrases import PhrasePicker
+from jarvis.cognition.planner import CascadePlanner
 from jarvis.cognition.prompts import system_prompt
 from jarvis.cognition.reporting import (
     CascadePublisher,
@@ -34,9 +37,9 @@ from jarvis.cognition.reporting import (
     build_response,
     timer_response,
 )
-from jarvis.cognition.router import Route, Router, profile_task
+from jarvis.cognition.router import Route, Router
 from jarvis.cognition.speaker import ResponseStream
-from jarvis.cognition.spoken import local_now, spoken_date
+from jarvis.cognition.spoken import local_now
 from jarvis.cognition.timers import TimerService
 from jarvis.cognition.tool_loop import ToolLoop, ToolRegistry
 from jarvis.contracts.base import new_correlation_id
@@ -60,7 +63,7 @@ if TYPE_CHECKING:
     from jarvis.bus.base import EventBus, Subscription
     from jarvis.cognition.budget import SpendLedger
     from jarvis.cognition.classifier import IntentClassifier
-    from jarvis.cognition.context import BuiltContext
+    from jarvis.cognition.context import MemoryAccess
     from jarvis.cognition.levels import CloudModel
     from jarvis.cognition.llm import LocalModel
     from jarvis.cognition.router import PrivacySwitch
@@ -90,8 +93,15 @@ class CognitiveOrchestrator:
         user_name: Callable[[], str] = lambda: "Usuario",
         clock: Callable[[], datetime] | None = None,
         phrases: PhrasePicker | None = None,
+        memory: MemoryAccess | None = None,
+        history: ConversationHistory | None = None,
+        confirmations: PendingConfirmations | None = None,
     ) -> None:
-        """Conecta las piezas. No se suscribe a nada hasta `start`."""
+        """Conecta las piezas. No se suscribe a nada hasta `start`.
+
+        `memory` y `history` vienen del sistema de memoria (Fase 3); sin ellos,
+        la cascada usa un historial propio en RAM, como en la Fase 2.
+        """
         self._bus = bus
         self._config = config
         self._classifier = classifier
@@ -113,8 +123,17 @@ class CognitiveOrchestrator:
         )
         self._router = Router(config)
         self._fast = FastPath()
-        self._context = ContextBuilder()
-        self._history = ConversationHistory(config().history_turns)
+        self._owns_history = history is None
+        self._history = (
+            history if history is not None else ConversationHistory(config().history_turns)
+        )
+        self._prompts = PromptAssembler(self._history, user_name, clock)
+        self._planner = CascadePlanner(
+            config=config, router=self._router, fast=self._fast, prompts=self._prompts,
+            control=self._control, privacy=privacy,
+        )  # fmt: skip
+        self._planner.memory = memory
+        self._confirmations = confirmations or PendingConfirmations(lambda: 15.0)
         self._timers = TimerService(self._announce_timer)
         self._runner = LevelRunner(
             config=config,
@@ -139,6 +158,16 @@ class CognitiveOrchestrator:
     def tools(self) -> ToolRegistry:
         """Las herramientas disponibles."""
         return self._tools
+
+    @property
+    def classifier(self) -> IntentClassifier:
+        """El clasificador, para registrar rutinas aprendidas."""
+        return self._classifier
+
+    @property
+    def confirmations(self) -> PendingConfirmations:
+        """La accion que espera un "si"."""
+        return self._confirmations
 
     async def start(self, *, listen_voice: bool = True, warm_up: bool = True) -> None:
         """Se suscribe a la voz y calienta el modelo local en segundo plano."""
@@ -215,7 +244,8 @@ class CognitiveOrchestrator:
         token = set_correlation_id(cid)
         started = time.perf_counter()
         cfg = self._config()
-        self._history.resize(cfg.history_turns)
+        if self._owns_history:
+            self._history.resize(cfg.history_turns)
         stream = ResponseStream(
             self._publish_chunk, cid, max_sentences=cfg.spoken_max_sentences, started=started
         )
@@ -238,26 +268,8 @@ class CognitiveOrchestrator:
                 classification = self._classifier.classify(text)
                 intent, classify_ms = classification.intent, classification.elapsed_ms
                 await self._out.emit(EventType.COGNITION_INTENT_CLASSIFIED, intent, cid)
-                local_ctx = self._build(text, structured=True, budget=cfg.local_context_tokens)
-                blocker = self._control.cloud_blocker()
-                route = self._router.decide(
-                    intent,
-                    profile_task(text, local_ctx.tokens),
-                    privacy=self._privacy.mode,
-                    cloud_blocker=blocker,
-                    fast_path_handles=self._fast.handles(intent.name),
-                )
-                interaction = Interaction(
-                    text=text,
-                    intent=intent,
-                    correlation_id=cid,
-                    stream=stream,
-                    attempt=attempt,
-                    local_context=lambda: local_ctx,
-                    cloud_context=lambda: self._build(
-                        text, structured=False, budget=cfg.cloud_context_tokens
-                    ),
-                    cloud_blocker=self._control.cloud_blocker,
+                route, interaction = await self._planner.plan(
+                    text, intent, correlation_id=cid, stream=stream, attempt=attempt
                 )
                 await self._publish_route(route, interaction)
                 if route.level is CascadeLevel.FAST_PATH:
@@ -300,6 +312,8 @@ class CognitiveOrchestrator:
                 now=now,
                 step_percent=self._config().fast_step_percent,
                 cancelled_previous=cancelled_previous,
+                text=it.text,
+                confirmations=self._confirmations,
             ),
         )
         it.attempt.level = CascadeLevel.FAST_PATH
@@ -347,20 +361,6 @@ class CognitiveOrchestrator:
         return response
 
     # ------------------------------------------------------------------
-
-    def _build(self, text: str, *, structured: bool, budget: int) -> BuiltContext:
-        now = self._clock() if self._clock else local_now()
-        # DECISION: el nivel 2 no recibe estado. Medido: qwen3:4b lo repetia en
-        # voz alta ("Modo HYBRID activado", "Hoy es lunes... 20:26"). Fecha y
-        # hora las contesta el nivel 1; la nube si las recibe.
-        state = "" if structured else f"{spoken_date(now)[:-1]}, {now:%H:%M}"
-        return self._context.build(
-            system=system_prompt(self._user_name(), structured=structured),
-            user_text=text,
-            budget_tokens=budget,
-            history=self._history,
-            state=state,
-        )
 
     async def on_cost(self, update: CostUpdate) -> None:
         """Recibe cada gasto del nivel 3: lo publica y prepara el aviso si se agoto."""

@@ -177,11 +177,13 @@ def build_catalog() -> tuple[IntentSpec, ...]:
 
     Las intenciones abiertas con patrones muy especificos (archivo, navegador,
     nube explicita, codigo) van delante de las fijas generales como `apps.open`.
+    Las de memoria van antes que las fijas: "olvida lo de X" no es "olvidalo".
     """
     from jarvis.cognition.intents_fast import FAST_INTENTS
+    from jarvis.cognition.intents_memory import MEMORY_INTENTS
     from jarvis.cognition.intents_open import OPEN_INTENTS, PRIORITY_OPEN_INTENTS
 
-    catalog = (*PRIORITY_OPEN_INTENTS, *FAST_INTENTS, *OPEN_INTENTS)
+    catalog = (*PRIORITY_OPEN_INTENTS, *MEMORY_INTENTS, *FAST_INTENTS, *OPEN_INTENTS)
     names = [item.name for item in catalog]
     duplicated = {name for name in names if names.count(name) > 1}
     if duplicated:

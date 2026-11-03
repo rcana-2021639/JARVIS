@@ -79,7 +79,9 @@ def test_el_catalogo_cumple_los_minimos_del_documento():
     fast = [item for item in catalog if item.level is CascadeLevel.FAST_PATH]
     handled = FastPath().intents
     assert len(handled) >= 25
-    assert {item.name for item in fast} <= set(handled), "toda intencion fija tiene manejador"
+    # Las de memoria las registra el sistema de memoria al conectarse (test_memory_system).
+    own = {item.name for item in fast if item.domain != "memory"}
+    assert own <= set(handled), "toda intencion fija tiene manejador"
     domains = {item.domain for item in catalog}
     for needed in (
         "media",

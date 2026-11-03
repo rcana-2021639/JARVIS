@@ -12,6 +12,7 @@ Los diez contratos y de que hablan:
     ToolResult    lo que esa herramienta devolvio
     Response      lo que Jarvis contesta, y cuanto costo producirlo
     MemoryRecord  una unidad de memoria de cualquiera de las cinco capas
+    ConsolidationReport  lo que aprendio una consolidacion nocturna
     SystemState   el estado global en un instante
     AuditEntry    una linea de la bitacora de solo-anadir
     Event         el sobre que viaja por el bus
@@ -43,7 +44,7 @@ from jarvis.contracts.enums import (
     SpeechEndReason,
 )
 from jarvis.contracts.events import Event
-from jarvis.contracts.memory import MemoryRecord
+from jarvis.contracts.memory import ConsolidationReport, MemoryRecord
 from jarvis.contracts.system import StateChange, SystemState, Telemetry
 from jarvis.contracts.tools import ToolCall, ToolResult
 from jarvis.contracts.voice import (
@@ -65,6 +66,7 @@ EXPORTED_CONTRACTS: tuple[type[BaseContract], ...] = (
     ToolResult,
     Response,
     MemoryRecord,
+    ConsolidationReport,
     Telemetry,
     SystemState,
     AuditEntry,
@@ -92,6 +94,7 @@ __all__ = [
     "CascadeRecord",
     "Command",
     "CommandOrigin",
+    "ConsolidationReport",
     "CoreState",
     "CorrelationId",
     "CostUpdate",

@@ -14,6 +14,7 @@ from jarvis.cognition.budget import SpendLedger
 from jarvis.cognition.catalog import build_catalog
 from jarvis.cognition.classifier import IntentClassifier
 from jarvis.cognition.cloud_llm import ClaudeClient
+from jarvis.cognition.confirm import PendingConfirmations
 from jarvis.cognition.demo_tools import demo_tools
 from jarvis.cognition.embeddings import EmbeddingModelMissingError, OnnxEmbedder
 from jarvis.cognition.local_llm import OllamaClient
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from jarvis.bus.base import EventBus
+    from jarvis.cognition.context import ConversationHistory, MemoryAccess
     from jarvis.cognition.embeddings import Embedder
     from jarvis.config import CognitionConfig, JarvisConfig
     from jarvis.contracts.cascade import CostUpdate
@@ -38,17 +40,19 @@ _SECRET_TTL_S = 60.0
 """Cuanto se recuerda la clave leida del llavero antes de volver a consultarlo."""
 
 
-def build_classifier(config: Callable[[], JarvisConfig]) -> IntentClassifier:
+def build_classifier(
+    config: Callable[[], JarvisConfig], embedder: Embedder | None = None
+) -> IntentClassifier:
     """El clasificador con embeddings si el modelo esta; si no, solo patrones.
 
     Que falte MiniLM no impide arrancar: se avisa y se sigue con patrones, que
-    cubren todas las ordenes de forma fija.
+    cubren todas las ordenes de forma fija. `embedder` permite compartir el
+    modelo ya cargado por la memoria.
     """
     root = config()
     cog = root.cognition
-    embedder: Embedder | None = None
     model_dir = root.resolved(cog.intent_model_dir)
-    if cog.classifier_engine == "embeddings":
+    if embedder is None and cog.classifier_engine == "embeddings":
         try:
             embedder = OnnxEmbedder(model_dir)
         except EmbeddingModelMissingError as error:
@@ -72,8 +76,19 @@ def _cached_secret(name: str) -> Callable[[], str | None]:
     return read
 
 
-def build_cascade(bus: EventBus, config: Callable[[], JarvisConfig]) -> CognitiveOrchestrator:
-    """El orquestador real, con todos sus niveles."""
+def build_cascade(
+    bus: EventBus,
+    config: Callable[[], JarvisConfig],
+    *,
+    memory: MemoryAccess | None = None,
+    history: ConversationHistory | None = None,
+    embedder: Embedder | None = None,
+) -> CognitiveOrchestrator:
+    """El orquestador real, con todos sus niveles.
+
+    Con memoria la arma `jarvis.memory.factory.build_assistant`; sin ella, la
+    cascada funciona como en la Fase 2.
+    """
     root = config()
 
     def cog() -> CognitionConfig:
@@ -100,13 +115,16 @@ def build_cascade(bus: EventBus, config: Callable[[], JarvisConfig]) -> Cognitiv
     orchestrator = CognitiveOrchestrator(
         bus,
         cog,
-        build_classifier(config),
+        build_classifier(config, embedder),
         ledger=ledger,
         privacy=privacy,
         local=OllamaClient(cog),
         cloud=cloud,
         tools=tools,
         user_name=lambda: config().user_name,
+        memory=memory,
+        history=history,
+        confirmations=PendingConfirmations(lambda: config().guardian.confirmation_timeout_s),
     )
     holder.append(orchestrator)
     return orchestrator

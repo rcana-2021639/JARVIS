@@ -5,6 +5,7 @@
     "AuditEntry": "audit-entry.schema.json",
     "CascadeRecord": "cascade-record.schema.json",
     "Command": "command.schema.json",
+    "ConsolidationReport": "consolidation-report.schema.json",
     "CostUpdate": "cost-update.schema.json",
     "Event": "event.schema.json",
     "Intent": "intent.schema.json",

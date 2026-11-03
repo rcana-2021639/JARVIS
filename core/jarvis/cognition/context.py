@@ -4,7 +4,7 @@ Prioridad, de lo que nunca se poda a lo primero que se poda:
 
     1. instruccion del sistema      nunca
     2. estado actual                hora, modo; viaja pegado a la orden
-    3. memoria recuperada           (Fase 3; hoy llega vacia)
+    3. memoria recuperada           la recuperacion hibrida de la Fase 3
     4. ultimos turnos               los mas recientes se conservan
     5. resumenes de lo viejo        una linea por turno ya expulsado
 
@@ -28,16 +28,27 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from jarvis.cognition.llm import ChatMessage
+from jarvis.cognition.prompts import system_prompt
+from jarvis.cognition.spoken import local_now, spoken_date
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from jarvis.contracts.enums import CascadeLevel
 
-__all__ = ["BuiltContext", "ContextBuilder", "ConversationHistory", "Turn", "estimate_tokens"]
+__all__ = [
+    "BuiltContext",
+    "ContextBuilder",
+    "ConversationHistory",
+    "MemoryAccess",
+    "PromptAssembler",
+    "Recollection",
+    "Turn",
+    "estimate_tokens",
+]
 
 _CHARS_PER_TOKEN = 3.5
 _MESSAGE_OVERHEAD = 4
@@ -204,3 +215,55 @@ class ContextBuilder:
         content = "\n".join([*preface, user_text]) if preface else user_text
         messages.append(ChatMessage("user", content))
         return messages
+
+
+@dataclass(frozen=True, slots=True)
+class Recollection:
+    """Lo que la memoria aporta a una orden, ya cortado a cada presupuesto."""
+
+    local: tuple[str, ...] = ()
+    """Para el nivel 2: pocos tokens, que en CPU cada uno cuesta."""
+    cloud: tuple[str, ...] = ()
+    """Para el nivel 3: el presupuesto completo de recuperacion."""
+
+
+class MemoryAccess(Protocol):
+    """Lo que la cascada necesita de la memoria (Fase 3). La implementa `jarvis.memory`."""
+
+    async def recollect(self, text: str) -> Recollection:
+        """Recupera lo relevante para una orden. Nunca lanza: sin memoria, vacio."""
+        ...
+
+
+class PromptAssembler:
+    """Arma el contexto de cada nivel: sistema, historial, memoria y estado."""
+
+    def __init__(
+        self,
+        history: ConversationHistory,
+        user_name: Callable[[], str],
+        clock: Callable[[], datetime] | None,
+    ) -> None:
+        """Args: history, los turnos; user_name; clock, la hora (simulable)."""
+        self.history = history
+        self._user_name = user_name
+        self._clock = clock
+        self._builder = ContextBuilder()
+
+    def build(
+        self, text: str, *, structured: bool, budget: int, memory: Sequence[str] = ()
+    ) -> BuiltContext:
+        """El contexto de una orden para el nivel 2 (`structured`) o el 3."""
+        now = self._clock() if self._clock else local_now()
+        # DECISION: el nivel 2 no recibe estado. Medido: qwen3:4b lo repetia en
+        # voz alta ("Modo HYBRID activado", "Hoy es lunes... 20:26"). Fecha y
+        # hora las contesta el nivel 1; la nube si las recibe.
+        state = "" if structured else f"{spoken_date(now)[:-1]}, {now:%H:%M}"
+        return self._builder.build(
+            system=system_prompt(self._user_name(), structured=structured),
+            user_text=text,
+            budget_tokens=budget,
+            history=self.history,
+            state=state,
+            memory=memory,
+        )

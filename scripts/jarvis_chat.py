@@ -1,14 +1,16 @@
-"""Habla con Jarvis escribiendo. La demostracion de la Fase 2 sin microfono.
+"""Habla con Jarvis escribiendo. La demostracion sin microfono.
 
 Cada linea pasa por la cascada completa -- clasificador, enrutador, ruta
-rapida, Ollama y la nube si hay clave -- y se muestra que nivel la atendio,
-por que y cuanto tardo. Con `--voz`, ademas, Jarvis dice las respuestas por
-los altavoces con Piper, frase a frase conforme se generan.
+rapida, Ollama y la nube si hay clave -- con la memoria de la Fase 3: lo que
+le cuentes queda en config/data/ y lo recuerda entre sesiones. Se muestra que
+nivel atendio, por que, cuanto tardo y cuantos recuerdos se usaron. Con
+`--voz`, ademas, Jarvis dice las respuestas por los altavoces con Piper.
 
 Uso:
 
     python scripts/jarvis_chat.py
     python scripts/jarvis_chat.py --voz
+    python scripts/jarvis_chat.py --sin-memoria     # la cascada de la Fase 2
 
 Ctrl+C o una linea vacia para salir.
 """
@@ -31,6 +33,7 @@ from jarvis.cognition import build_cascade
 from jarvis.config_watcher import ConfigManager
 from jarvis.contracts import CascadeRecord, Event, EventType, RouteDecision
 from jarvis.logging import bind_bus, configure_logging
+from jarvis.memory import build_assistant
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -109,7 +112,19 @@ async def run(args: argparse.Namespace) -> int:
         await manager.start()
         bus.subscribe(EventType.COGNITION_ROUTED, on_route)
         bus.subscribe(EventType.COGNITION_COMPLETED, on_record)
-        cascade = build_cascade(bus, lambda: manager.current)
+        memory = None
+        if args.sin_memoria:
+            cascade = build_cascade(bus, lambda: manager.current)
+        else:
+            cascade, memory = build_assistant(bus, lambda: manager.current)
+            report = await memory.start()
+            if report is not None:
+                print(f"Memoria: {report.spoken()}")
+            stats = memory.stats()
+            print(
+                f"Memoria: {stats['hechos activos']} hechos, {stats['episodios']} episodios, "
+                f"{stats['entidades']} entidades, {stats['rutinas activas']} rutinas."
+            )
         pipeline = await _speaker(bus, manager) if args.voz else None
         print(f"Calentando {manager.current.cognition.local_model} ...")
         await cascade.start(listen_voice=False)
@@ -138,6 +153,9 @@ async def run(args: argparse.Namespace) -> int:
                     await pipeline.wait_idle(60)
         finally:
             await cascade.stop()
+            if memory is not None:
+                await memory.stop()
+                memory.close()
             if pipeline is not None:
                 await pipeline.stop()
             await manager.stop()
@@ -151,6 +169,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--voz", action="store_true", help="Decir las respuestas por los altavoces."
+    )
+    parser.add_argument(
+        "--sin-memoria", action="store_true", help="Sin memoria a largo plazo (Fase 2)."
     )
     args = parser.parse_args()
     try:

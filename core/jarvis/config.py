@@ -474,8 +474,20 @@ class MemoryConfig(_Section):
         description="Donde viven SQLite y LanceDB. Relativa a la raiz del proyecto.",
     )
     embedding_model: str = Field(
-        default="bge-m3",
-        description="Modelo de embeddings para la capa semantica.",
+        default="paraphrase-multilingual-MiniLM-L12-v2",
+        description=(
+            "Modelo de embeddings para la capa semantica. Es el mismo MiniLM del "
+            "clasificador: sin GPU, bge-m3 tarda 100-200 ms por consulta."
+        ),
+    )
+    embedding_model_dir: Path = Field(
+        default=Path("models/intent"),
+        description="Donde estan model.onnx y tokenizer.json del modelo de embeddings.",
+    )
+    embedding_max_tokens: int = Field(
+        default=128,
+        gt=0,
+        description="Tokens que se codifican de cada hecho. Un hecho cabe en 128.",
     )
     working_turns: int = Field(
         default=20,
@@ -485,18 +497,109 @@ class MemoryConfig(_Section):
     retrieval_budget_tokens: int = Field(
         default=1500,
         gt=0,
-        description="Tope de tokens que la recuperacion puede meter al contexto.",
+        description="Tope de tokens que la recuperacion puede meter al contexto del nivel 3.",
+    )
+    local_retrieval_tokens: int = Field(
+        default=300,
+        gt=0,
+        description=(
+            "Tope para el nivel 2. Compite con `cognition.local_context_tokens` y en "
+            "CPU cada token de contexto se paga en latencia."
+        ),
     )
     retrieval_timeout_ms: int = Field(
         default=100,
         gt=0,
         description="Objetivo duro de la recuperacion hibrida de punta a punta.",
     )
+    retrieval_candidates: int = Field(
+        default=20,
+        gt=0,
+        description="Candidatos que aporta cada una de las cuatro busquedas antes de fusionar.",
+    )
+    rrf_k: int = Field(
+        default=60,
+        gt=0,
+        description="Constante de Reciprocal Rank Fusion. 60 es el valor del articulo original.",
+    )
+    vector_min_similarity: float = Field(
+        default=0.45,
+        ge=0.0,
+        le=1.0,
+        description="Coseno minimo para que un hecho cuente como parecido a la consulta.",
+    )
+    duplicate_similarity: float = Field(
+        default=0.93,
+        ge=0.0,
+        le=1.0,
+        description="Coseno a partir del cual un hecho nuevo es el mismo que uno guardado.",
+    )
+    forget_min_similarity: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Coseno minimo para que 'olvida lo de X' incluya un hecho.",
+    )
+    recency_half_life_hours: float = Field(
+        default=72.0,
+        gt=0,
+        description="Vida media del peso por recencia en la recuperacion.",
+    )
+    graph_depth: int = Field(
+        default=2,
+        ge=1,
+        le=4,
+        description="Saltos que se recorren en el grafo desde una entidad mencionada.",
+    )
+    remember_importance: float = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        description="Importancia de lo que el usuario pide recordar explicitamente.",
+    )
+    consolidation_enabled: bool = Field(
+        default=True,
+        description="Si la consolidacion nocturna se programa sola.",
+    )
     consolidation_hour: int = Field(
         default=4,
         ge=0,
         le=23,
         description="Hora local a la que corre la consolidacion nocturna.",
+    )
+    consolidation_engine: Literal["local_llm", "rules"] = Field(
+        default="local_llm",
+        description=(
+            "Quien extrae hechos y entidades: el modelo local (Ollama) o solo reglas. "
+            "Si Ollama no responde, se cae a reglas y se dice en el reporte."
+        ),
+    )
+    consolidation_batch: int = Field(
+        default=8,
+        gt=0,
+        description="Turnos por llamada al modelo local al consolidar.",
+    )
+    consolidation_catch_up: bool = Field(
+        default=True,
+        description="Si al arrancar se consolida lo que quedo pendiente de noches sin correr.",
+    )
+    consolidation_idle_minutes: float = Field(
+        default=2.0,
+        ge=0.0,
+        description=(
+            "La consolidacion cede el modelo local si hubo una orden hace menos de "
+            "esto: Ollama atiende una peticion a la vez."
+        ),
+    )
+    session_gap_minutes: float = Field(
+        default=30.0,
+        gt=0,
+        description="Silencio que separa una conversacion de la siguiente.",
+    )
+    summary_min_turns: int = Field(
+        default=6,
+        gt=1,
+        description="Conversaciones con al menos tantos turnos se resumen al consolidar.",
     )
     decay_half_life_days: float = Field(
         default=30.0,

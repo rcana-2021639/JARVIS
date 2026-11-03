@@ -156,12 +156,36 @@ output_per_mtok = 20.00
 # MEMORIA -- las cinco capas
 # -----------------------------------------------------------------------------
 [memory]
-data_dir = "config/data"
-embedding_model = "bge-m3"
+data_dir = "config/data"      # SQLite (memory.db) y LanceDB (vectors/); no se versiona
+# El mismo MiniLM multilingue del clasificador: sin GPU, bge-m3 tarda 100-200 ms
+# por consulta y rompe la meta de 100 ms de la recuperacion.
+embedding_model = "paraphrase-multilingual-MiniLM-L12-v2"
+embedding_model_dir = "models/intent"
+embedding_max_tokens = 128
 working_turns = 20
-retrieval_budget_tokens = 1500
-retrieval_timeout_ms = 100    # objetivo duro de la recuperacion hibrida
-consolidation_hour = 4        # hora local de la consolidacion nocturna
+
+# Recuperacion hibrida: vectores + BM25 + grafo + recencia, fusionados con RRF
+retrieval_budget_tokens = 1500  # lo que entra al contexto del nivel 3
+local_retrieval_tokens = 300    # y al del nivel 2: en CPU cada token cuesta
+retrieval_timeout_ms = 100      # objetivo duro de punta a punta
+retrieval_candidates = 20       # por cada una de las cuatro busquedas
+rrf_k = 60
+vector_min_similarity = 0.45    # coseno minimo para que un hecho cuente
+duplicate_similarity = 0.93     # un hecho nuevo asi de parecido es el mismo
+forget_min_similarity = 0.55    # "olvida lo de X" abarca hechos asi de parecidos
+recency_half_life_hours = 72.0
+graph_depth = 2                 # saltos desde una entidad mencionada
+remember_importance = 0.9       # "Jarvis, recuerda que..."
+
+# Consolidacion nocturna
+consolidation_enabled = true
+consolidation_hour = 4          # hora local
+consolidation_engine = "local_llm"  # o "rules"; sin Ollama se cae a reglas
+consolidation_batch = 8         # turnos por llamada al modelo local
+consolidation_catch_up = true   # al arrancar, consolidar noches que no corrieron
+consolidation_idle_minutes = 2.0  # cede Ollama si hubo una orden hace menos de esto
+session_gap_minutes = 30.0      # silencio que separa una conversacion de otra
+summary_min_turns = 6           # conversaciones mas largas se resumen
 decay_half_life_days = 30.0
 routine_promotion_threshold = 3
 episodic_compression_days = 90

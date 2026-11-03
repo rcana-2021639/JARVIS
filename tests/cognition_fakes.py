@@ -209,9 +209,17 @@ def build(
     budget: float = 0.5,
     embedder: FakeEmbedder | None = None,
     rng: random.Random | None = None,
+    memory: Any = None,
+    history: Any = None,
+    confirmations: Any = None,
+    clock: Any = None,
     **overrides: Any,
 ) -> Rig:
-    """Arma un orquestador con falsos. `overrides` va a `CognitionConfig`."""
+    """Arma un orquestador con falsos. `overrides` va a `CognitionConfig`.
+
+    `memory`, `history` y `confirmations` conectan la memoria de la Fase 3
+    (ver `tests/memory_fakes.py`); `clock` reemplaza a la hora fija.
+    """
     config = CognitionConfig(privacy_mode=privacy, daily_budget_usd=budget, **overrides)
     switch = PrivacySwitch(lambda: config.privacy_mode)
     ledger = SpendLedger(None, lambda: config.daily_budget_usd, today=FIXED_NOW.date)
@@ -230,7 +238,10 @@ def build(
         cloud=cloud,
         tools=tools,
         user_name=lambda: "Rhandy",
-        clock=lambda: FIXED_NOW,
+        clock=clock or (lambda: FIXED_NOW),
         phrases=PhrasePicker(rng),
+        memory=memory,
+        history=history,
+        confirmations=confirmations,
     )
     return Rig(orchestrator, config, ledger, switch, local, cloud, tools)

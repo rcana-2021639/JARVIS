@@ -40,7 +40,7 @@ __all__ = ["Attempt", "CloudModel", "Interaction", "LevelRunner"]
 
 _log = get_logger(__name__)
 
-_TOOL_INTENTS = frozenset({"query.calculation"})
+_TOOL_INTENTS = frozenset({"query.calculation", "memory.recall"})
 """Intenciones que se resuelven mejor con herramientas. Crece en la Fase 6."""
 
 

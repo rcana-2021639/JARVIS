@@ -5,7 +5,7 @@ en la PC, escucha por una palabra de activación, entiende lenguaje natural,
 opera el sistema operativo y las aplicaciones, recuerda todo lo que ha pasado, y
 se presenta a través de una interfaz tridimensional reactiva al sonido.
 
-Se construye en 13 fases. **Estado actual: Fase 2 completa.**
+Se construye en 13 fases. **Estado actual: Fase 3 completa.**
 
 ---
 
@@ -16,7 +16,7 @@ Se construye en 13 fases. **Estado actual: Fase 2 completa.**
 | 0 | Fundaciones y contratos | ✅ Completa |
 | 1 | Pipeline de voz | ✅ Completa |
 | 2 | Orquestador cognitivo | ✅ Completa |
-| 3 | Sistema de memoria | Pendiente |
+| 3 | Sistema de memoria | ✅ Completa |
 | 4 | Núcleo 3D | Pendiente |
 | 5 | HUD completo | Pendiente |
 | 6 | Control del sistema operativo | Pendiente |
@@ -32,6 +32,20 @@ El detalle de lo entregado en cada fase está en [ESTADO.md](ESTADO.md).
 ---
 
 ## Qué hay hoy
+
+**Fase 3 — memoria** (`core/jarvis/memory/`). Jarvis ya recuerda. Cinco capas:
+la de trabajo (últimos turnos, en RAM), la episódica (todo lo ocurrido, SQLite
+con búsqueda de texto completo), la semántica (hechos con importancia y
+decaimiento, vectores en LanceDB), un grafo de entidades (personas, proyectos,
+archivos y cómo se relacionan) y la procedimental (lo que se pide igual tres
+veces se vuelve rutina de ruta rápida). Antes de cada respuesta de un modelo,
+cuatro búsquedas en paralelo (significado, palabras, grafo y recencia) traen
+lo que viene al caso en ~30 ms. Cada noche, el modelo local consolida el día:
+extrae hechos, enlaza entidades, resume, deja desvanecer lo que no se usa y
+propone rutinas.
+
+Por voz: "recuerda que…", "olvida lo de…" (con confirmación), "qué sabes
+de…", "qué hicimos ayer" y "qué aprendiste anoche".
 
 **Fase 2 — orquestador cognitivo** (`core/jarvis/cognition/`). Jarvis ya
 entiende y contesta. Cada orden pasa por un clasificador de intención (regex,
@@ -119,7 +133,8 @@ archivo.
 ```
 
 Escribes y Jarvis contesta en pantalla y por los altavoces; muestra qué nivel
-atendió cada orden. Sin `--voz`, solo texto.
+atendió cada orden. Sin `--voz`, solo texto. Lo que le cuentes queda en la
+memoria (`config/data/`, no versionado) entre sesiones.
 
 Con micrófono:
 
@@ -127,7 +142,9 @@ Con micrófono:
 .venv/Scripts/python scripts/voice_live.py
 ```
 
-Di **"Hey Jarvis"** —pronunciado a la inglesa, "DYAR-vis"— y una orden.
+Di **"Jarvis"** y una orden. Con `wake_engine = "whisper"` (el valor de este
+equipo) Whisper reconoce "Jarvis" en español; con `"openwakeword"` hay que
+decir "Hey Jarvis" a la inglesa.
 `--echo` vuelve al eco de la Fase 1 y `--list-devices` muestra qué micrófonos
 ve.
 
@@ -140,6 +157,18 @@ ve.
 Clasifica y enruta 50 órdenes variadas y reporta la distribución por nivel.
 Con `--run` las ejecuta de verdad; `--privacy` verifica que en modo solo-local
 no sale tráfico y `--kill-ollama` mata Ollama a media respuesta.
+
+### Inspeccionar la memoria
+
+```bash
+.venv/Scripts/python scripts/memory_inspect.py --query "mi hermana"
+```
+
+Muestra cuántos registros hay por capa, los hechos por importancia, el grafo
+y las rutinas, y prueba una recuperación con sus latencias. `--bench 10000`
+mide la recuperación con 10.000 registros sintéticos, `--simulate` consolida
+100 episodios simulados con el modelo local y `--consolidate` corre la
+consolidación ya, sin esperar a la noche.
 
 ### Medir el pipeline de voz
 
@@ -193,7 +222,7 @@ core/jarvis/     el cerebro y el cuerpo (Python)
   bus/           publicación/suscripción de eventos
   voice/         wake · vad · stt · tts · interrupción      (Fase 1) ✅
   cognition/     router · cascada · prompts · confianza      (Fase 2) ✅
-  memory/        cinco capas · consolidación                 (Fase 3)
+  memory/        cinco capas · recuperación · consolidación  (Fase 3) ✅
   tools/         servidores MCP                              (Fases 6-7)
   guardian/      permisos · confirmación · auditoría         (Fase 8)
   bridge/        servidor WS · autenticación · presencia     (Fase 9)

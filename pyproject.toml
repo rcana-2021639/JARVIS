@@ -16,6 +16,9 @@ dependencies = [
     "anthropic>=2.0",
     "httpx2>=2.16",
     "keyring>=25",
+    # Fase 3: la memoria. SQLite (con FTS5) viene con Python; los vectores, en LanceDB.
+    "lancedb>=0.41",
+    "pyarrow>=16",
 ]
 
 [project.optional-dependencies]
@@ -129,6 +132,8 @@ module = [
     "scipy.*",
     # El clasificador de intencion (Fase 2) usa onnxruntime, que tampoco los publica.
     "onnxruntime.*",
+    # LanceDB (Fase 3) entrega sus tablas como pyarrow, que no publica tipos.
+    "pyarrow.*",
 ]
 ignore_missing_imports = true
 

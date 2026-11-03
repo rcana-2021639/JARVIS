@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from jarvis.cognition.catalog import Entities
+    from jarvis.cognition.confirm import PendingConfirmations
     from jarvis.cognition.phrases import PhrasePicker
     from jarvis.cognition.timers import TimerService
     from jarvis.cognition.tool_loop import ToolRegistry
@@ -92,6 +93,10 @@ class FastContext:
     step_percent: int
     cancelled_previous: bool = False
     """Si esta orden interrumpio otra que seguia en curso."""
+    text: str = ""
+    """La orden tal cual llego, con mayusculas y tildes (las entidades van normalizadas)."""
+    confirmations: PendingConfirmations | None = None
+    """La accion que espera un "si", si hay alguna."""
 
 
 Handler = "Callable[[Entities, FastContext], Awaitable[FastOutcome]]"
@@ -267,6 +272,8 @@ class FastPath:
         self.register("timer.query", self._timer_query)
         self.register("jarvis.stop_talking", self._stop_talking)
         self.register("jarvis.cancel", self._cancel)
+        self.register("jarvis.confirm", self._confirm)
+        self.register("jarvis.deny", self._deny)
         self.register("jarvis.repeat", self._repeat)
         self.register(
             "jarvis.privacy_local", self._privacy(PrivacyMode.LOCAL_ONLY, "privacy_local")
@@ -333,8 +340,24 @@ class FastPath:
 
     @staticmethod
     async def _cancel(entities: Entities, ctx: FastContext) -> FastOutcome:
-        key = "cancel" if ctx.cancelled_previous else "cancel_nothing"
+        # "Cancela" tambien es un no a la pregunta de confirmacion pendiente.
+        denied = ctx.confirmations.deny() if ctx.confirmations is not None else None
+        key = "cancel" if ctx.cancelled_previous or denied is not None else "cancel_nothing"
         return FastOutcome(ctx.phrases.pick(key), Emotion.NEUTRAL)
+
+    @staticmethod
+    async def _confirm(entities: Entities, ctx: FastContext) -> FastOutcome:
+        done = await ctx.confirmations.confirm() if ctx.confirmations is not None else None
+        if done is None:
+            return FastOutcome("No hay nada pendiente de confirmar.", Emotion.NEUTRAL)
+        return FastOutcome(done)
+
+    @staticmethod
+    async def _deny(entities: Entities, ctx: FastContext) -> FastOutcome:
+        denied = ctx.confirmations.deny() if ctx.confirmations is not None else None
+        if denied is None:
+            return FastOutcome("No hay nada pendiente de confirmar.", Emotion.NEUTRAL)
+        return FastOutcome("Entendido, no toco nada.", Emotion.NEUTRAL)
 
     @staticmethod
     async def _repeat(entities: Entities, ctx: FastContext) -> FastOutcome:

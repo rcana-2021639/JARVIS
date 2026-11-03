@@ -66,14 +66,12 @@ PRIORITY_OPEN_INTENTS: tuple[IntentSpec, ...] = (
 
 OPEN_INTENTS: tuple[IntentSpec, ...] = (
     spec(
-        "memory.remember", L2, "Guardar un dato que el usuario cuenta.",
-        patterns=[r"^(?:recuerda|anota|apunta|no olvides) que\b", r"^(?:guarda|memoriza) (?:esto|que)\b"],
-        examples=["acuerdate de que mi hermana se llama Ana", "toma nota: el wifi es casa123"],
-    ),
-    spec(
         "memory.recall", L2, "Consultar algo que el usuario conto antes.",
         patterns=[r"\bque te (?:dije|conte) (?:de|sobre)\b", r"\bte acuerdas (?:de|que)\b", r"^recuerdas\b"],
-        examples=["como te dije que se llamaba mi perro", "que habiamos dicho de la reunion"],
+        examples=[
+            "como te dije que se llamaba mi perro", "que habiamos dicho de la reunion",
+            "como se llama mi hermana", "donde vive mi mama", "cual es el nombre de mi jefe",
+        ],
     ),
     spec(
         "chat.opinion", L2, "Pedir la opinion de Jarvis.",
