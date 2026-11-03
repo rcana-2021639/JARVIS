@@ -26,6 +26,7 @@ from jarvis.contracts.enums import CoreState, Emotion, EventType
 from jarvis.contracts.voice import SpeechOutput, TtsAmplitude
 from jarvis.logging import get_logger
 from jarvis.voice.audio import frame_level
+from jarvis.voice.spectrum import band_levels
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -189,6 +190,7 @@ class VoiceSpeaker:
                             EventType.VOICE_TTS_AMPLITUDE,
                             TtsAmplitude(
                                 amplitude=min(1.0, rms * _AMPLITUDE_GAIN),
+                                bands=band_levels(block, tts.sample_rate),
                                 correlation_id=correlation_id,
                             ),
                             "voice.tts",

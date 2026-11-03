@@ -37,6 +37,7 @@ from jarvis.contracts import (
     Utterance,
     WakeDetection,
 )
+from jarvis.hudlink import start_hud
 from jarvis.logging import bind_bus, configure_logging
 from jarvis.memory import build_assistant
 from jarvis.voice import VoicePipeline
@@ -145,6 +146,7 @@ async def run(args: argparse.Namespace) -> int:
             )
 
         pipeline = VoicePipeline(bus, engines, lambda: manager.current.voice)
+        hud = await start_hud(bus, manager.current.ui)
         await pipeline.start()
         await pipeline.speak("Sistemas de voz en linea.")
         try:
@@ -155,6 +157,8 @@ async def run(args: argparse.Namespace) -> int:
                 await pipeline.source_finished.wait()
         finally:
             await pipeline.stop()
+            if hud is not None:
+                await hud.stop()
             if cascade is not None:
                 await cascade.stop()
             if memory is not None:

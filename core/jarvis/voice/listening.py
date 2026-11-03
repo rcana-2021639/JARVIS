@@ -34,6 +34,7 @@ from jarvis.logging import (
     user_text,
 )
 from jarvis.voice.audio import RingBuffer, frame_level
+from jarvis.voice.spectrum import band_levels
 from jarvis.voice.spotting import PhraseSegmenter
 from jarvis.voice.text import split_wake_word
 from jarvis.voice.transcription import Listening, Transcriber
@@ -277,6 +278,7 @@ class VoiceListener:
                 rms=rms,
                 peak=peak,
                 speech_probability=min(max(probability, 0.0), 1.0),
+                bands=band_levels(frame, rt.sample_rate),
                 correlation_id=cid,
             ),
             "voice.level",

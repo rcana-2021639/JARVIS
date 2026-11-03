@@ -32,6 +32,7 @@ from jarvis.bus import InMemoryEventBus
 from jarvis.cognition import build_cascade
 from jarvis.config_watcher import ConfigManager
 from jarvis.contracts import CascadeRecord, Event, EventType, RouteDecision
+from jarvis.hudlink import start_hud
 from jarvis.logging import bind_bus, configure_logging
 from jarvis.memory import build_assistant
 
@@ -126,6 +127,9 @@ async def run(args: argparse.Namespace) -> int:
                 f"{stats['entidades']} entidades, {stats['rutinas activas']} rutinas."
             )
         pipeline = await _speaker(bus, manager) if args.voz else None
+        hud = await start_hud(bus, manager.current.ui)
+        if hud is not None:
+            print(f"HUD en el puerto {hud.port}: abrelo con `npm run electron` en hud/")
         print(f"Calentando {manager.current.cognition.local_model} ...")
         await cascade.start(listen_voice=False)
         print(await cascade.health())
@@ -153,6 +157,8 @@ async def run(args: argparse.Namespace) -> int:
                     await pipeline.wait_idle(60)
         finally:
             await cascade.stop()
+            if hud is not None:
+                await hud.stop()
             if memory is not None:
                 await memory.stop()
                 memory.close()

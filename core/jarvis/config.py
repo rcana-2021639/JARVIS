@@ -722,6 +722,15 @@ class UIConfig(_Section):
         ),
     )
     ui_sounds: bool = Field(default=True, description="Sonidos sinteticos de interfaz.")
+    hud_enabled: bool = Field(
+        default=True,
+        description="Si el nucleo abre el WebSocket local que alimenta al HUD (Fase 4).",
+    )
+    hud_host: str = Field(
+        default="127.0.0.1",
+        description="REGLA DURA: solo la interfaz local; lo remoto es el puente de la Fase 9.",
+    )
+    hud_port: int = Field(default=8766, gt=0, le=65535, description="Puerto del WebSocket del HUD.")
     target_fps: int = Field(default=60, gt=0)
 
 

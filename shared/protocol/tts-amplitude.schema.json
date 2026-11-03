@@ -10,6 +10,15 @@
       "title": "Amplitude",
       "type": "number"
     },
+    "bands": {
+      "description": "Energia en 32 bandas logaritmicas de 80 Hz a 8 kHz, de 0 a 1 (Fase 4). Deforma la esfera del HUD. Vacia si no se calculo.",
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 64,
+      "title": "Bands",
+      "type": "array"
+    },
     "correlation_id": {
       "anyOf": [
         {

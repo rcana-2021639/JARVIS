@@ -19,6 +19,8 @@ dependencies = [
     # Fase 3: la memoria. SQLite (con FTS5) viene con Python; los vectores, en LanceDB.
     "lancedb>=0.41",
     "pyarrow>=16",
+    # Fase 4: el WebSocket local que alimenta al HUD.
+    "websockets>=15",
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,15 @@
   "additionalProperties": false,
   "description": "Nivel del microfono en un bloque de captura, ~30 veces por segundo.\n\nAlimenta la esfera del HUD mientras Jarvis escucha. Es un flujo de alta\nfrecuencia donde lo reciente vale mas que lo completo: sus consumidores se\nsuscriben con `OverflowPolicy.DROP_OLDEST` y una cola pequena.",
   "properties": {
+    "bands": {
+      "description": "Energia en 32 bandas logaritmicas de 80 Hz a 8 kHz, de 0 a 1 (Fase 4). Deforma la esfera del HUD. Vacia si no se calculo.",
+      "items": {
+        "type": "number"
+      },
+      "maxItems": 64,
+      "title": "Bands",
+      "type": "array"
+    },
     "correlation_id": {
       "anyOf": [
         {

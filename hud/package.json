@@ -1,0 +1,37 @@
+{
+  "name": "jarvis-hud",
+  "version": "0.4.0",
+  "private": true,
+  "description": "HUD de JARVIS: el nucleo 3D reactivo al audio (Fase 4)",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p electron/tsconfig.json --noEmit",
+    "electron:build": "tsc -p electron/tsconfig.json",
+    "electron": "npm run electron:build && electron .",
+    "electron:dev": "npm run electron:build && cross-env JARVIS_HUD_URL=http://127.0.0.1:5173 electron .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "9.114.0",
+    "@react-three/fiber": "8.17.10",
+    "@react-three/postprocessing": "2.16.3",
+    "postprocessing": "6.36.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.169.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.7.9",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@types/three": "0.169.0",
+    "@vitejs/plugin-react": "4.3.3",
+    "cross-env": "7.0.3",
+    "electron": "33.0.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.10"
+  }
+}

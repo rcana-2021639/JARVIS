@@ -1,0 +1,182 @@
+/*
+ * Estilos del HUD. Todos los valores salen de las variables que escribe
+ * applyTokens() desde src/design/tokens.ts: aqui no hay colores sueltos.
+ * Esquinas cortadas en diagonal, bordes de 1px, nada aparece de golpe.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+.frame {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  background: var(--void);
+  clip-path: polygon(
+    var(--chamfer) 0,
+    calc(100% - var(--chamfer)) 0,
+    100% var(--chamfer),
+    100% calc(100% - var(--chamfer)),
+    calc(100% - var(--chamfer)) 100%,
+    var(--chamfer) 100%,
+    0 calc(100% - var(--chamfer)),
+    0 var(--chamfer)
+  );
+  animation: emerge var(--t-cinematic) var(--ease) both;
+}
+
+/* El borde de 1px sigue el chaflan: un poligono SVG con trazo que no escala. */
+.frame__edge {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.frame__edge polygon {
+  fill: none;
+  stroke: var(--cyan-core);
+  stroke-opacity: 0.3;
+  stroke-width: var(--border);
+  filter: drop-shadow(0 0 2px var(--cyan-dim));
+}
+
+.frame__bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--grid) * 2);
+  height: calc(var(--grid) * 4);
+  padding: 0 calc(var(--grid) * 3);
+  -webkit-app-region: drag;
+  user-select: none;
+  z-index: 3;
+  background: linear-gradient(90deg, transparent, var(--abyss) 20%, var(--abyss) 80%, transparent);
+}
+
+.frame__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-1);
+  letter-spacing: 0.3em;
+  color: var(--cyan-core);
+  text-shadow: 0 0 8px var(--cyan-dim);
+}
+
+.frame__link {
+  font-family: var(--font-mono);
+  font-size: var(--fs-0);
+  letter-spacing: var(--tracking);
+  color: var(--text-muted);
+  transition: color var(--t-transition) var(--ease);
+}
+
+.frame__link--conectado {
+  color: var(--mint);
+}
+
+.frame__link--simulado {
+  color: var(--amber-core);
+}
+
+.frame__controls {
+  margin-left: auto;
+  display: flex;
+  gap: var(--grid);
+  -webkit-app-region: no-drag;
+}
+
+.frame__controls button {
+  width: calc(var(--grid) * 3);
+  height: calc(var(--grid) * 2.5);
+  border: var(--border) solid rgba(0, 229, 255, 0.3);
+  background: transparent;
+  color: var(--cyan-core);
+  font-family: var(--font-mono);
+  font-size: var(--fs-1);
+  line-height: 1;
+  cursor: pointer;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  transition:
+    background var(--t-micro) var(--ease),
+    color var(--t-micro) var(--ease);
+}
+
+.frame__controls button:hover {
+  background: var(--deep);
+  color: var(--cyan-glow);
+}
+
+.frame__stage {
+  position: relative;
+  min-height: 0;
+}
+
+.frame__stage canvas {
+  display: block;
+}
+
+.frame__status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: calc(var(--grid) * 3);
+  height: calc(var(--grid) * 4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-0);
+  letter-spacing: 0.3em;
+  color: var(--text-muted);
+  z-index: 3;
+}
+
+.frame__state {
+  color: var(--cyan-core);
+  transition: color var(--t-cinematic) var(--ease);
+}
+
+.frame[data-state="DORMIDO"] .frame__state,
+.frame[data-state="HABLANDO"] .frame__state {
+  color: var(--amber-core);
+}
+
+.frame[data-state="EJECUTANDO"] .frame__state {
+  color: var(--mint);
+}
+
+.frame[data-state="ERROR"] .frame__state,
+.frame[data-state="CONFIRMANDO"] .frame__state {
+  color: var(--crimson);
+}
+
+.frame__perf {
+  display: flex;
+  gap: calc(var(--grid) * 2);
+  color: var(--text-muted);
+}
+
+@keyframes emerge {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

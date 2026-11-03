@@ -103,6 +103,14 @@ class AudioLevel(BaseContract):
         le=1.0,
         description="Probabilidad de voz segun el VAD. None si el VAD no corrio en este bloque.",
     )
+    bands: list[float] = Field(
+        default_factory=list,
+        max_length=64,
+        description=(
+            "Energia en 32 bandas logaritmicas de 80 Hz a 8 kHz, de 0 a 1 (Fase 4). "
+            "Deforma la esfera del HUD. Vacia si no se calculo."
+        ),
+    )
     correlation_id: CorrelationId | None = Field(
         default=None,
         description="Interaccion en curso. None si se publica en reposo.",
@@ -168,4 +176,12 @@ class TtsAmplitude(BaseContract):
     """Amplitud del habla de Jarvis, ~60 veces por segundo, sincronizada con lo que suena."""
 
     amplitude: float = Field(ge=0.0, le=1.0, description="Envolvente del bloque, de 0 a 1.")
+    bands: list[float] = Field(
+        default_factory=list,
+        max_length=64,
+        description=(
+            "Energia en 32 bandas logaritmicas de 80 Hz a 8 kHz, de 0 a 1 (Fase 4). "
+            "Deforma la esfera del HUD. Vacia si no se calculo."
+        ),
+    )
     correlation_id: CorrelationId | None = Field(default=None)

@@ -5,7 +5,7 @@ en la PC, escucha por una palabra de activación, entiende lenguaje natural,
 opera el sistema operativo y las aplicaciones, recuerda todo lo que ha pasado, y
 se presenta a través de una interfaz tridimensional reactiva al sonido.
 
-Se construye en 13 fases. **Estado actual: Fase 3 completa.**
+Se construye en 13 fases. **Estado actual: Fase 4 completa.**
 
 ---
 
@@ -17,7 +17,7 @@ Se construye en 13 fases. **Estado actual: Fase 3 completa.**
 | 1 | Pipeline de voz | ✅ Completa |
 | 2 | Orquestador cognitivo | ✅ Completa |
 | 3 | Sistema de memoria | ✅ Completa |
-| 4 | Núcleo 3D | Pendiente |
+| 4 | Núcleo 3D | ✅ Completa |
 | 5 | HUD completo | Pendiente |
 | 6 | Control del sistema operativo | Pendiente |
 | 7 | Automatización web | Pendiente |
@@ -32,6 +32,17 @@ El detalle de lo entregado en cada fase está en [ESTADO.md](ESTADO.md).
 ---
 
 ## Qué hay hoy
+
+**Fase 4 — el núcleo 3D** (`hud/`). Jarvis ya tiene rostro: una esfera de
+energía en una ventana sin marco, transparente y siempre encima (Electron +
+React Three Fiber). Seis capas —semilla, 30.000 partículas con ruido simplex,
+anillos orbitales con graduación, filamentos, campo de fresnel y postproceso
+con bloom— que reaccionan en tiempo real a la voz, la del usuario entrando y
+la de Jarvis saliendo, analizada en 32 bandas de frecuencia. Los ocho estados
+(dormido, despierto, escuchando, pensando, hablando, ejecutando, error,
+confirmación) se ven distintos y se funden en 800 ms. 60 fps en la GPU
+integrada de este equipo. El núcleo Python la alimenta por un WebSocket local
+(`core/jarvis/hudlink/`); sin núcleo, el HUD corre una simulación.
 
 **Fase 3 — memoria** (`core/jarvis/memory/`). Jarvis ya recuerda. Cinco capas:
 la de trabajo (últimos turnos, en RAM), la episódica (todo lo ocurrido, SQLite
@@ -158,6 +169,30 @@ Clasifica y enruta 50 órdenes variadas y reporta la distribución por nivel.
 Con `--run` las ejecuta de verdad; `--privacy` verifica que en modo solo-local
 no sale tráfico y `--kill-ollama` mata Ollama a media respuesta.
 
+### El HUD
+
+Requiere [Node.js](https://nodejs.org) 20 o superior.
+
+```bash
+cd hud && npm install
+```
+
+```bash
+cd hud && npm run build && npm run electron
+```
+
+La ventana aparece arriba a la derecha y se arrastra por su barra. Con
+`jarvis_chat.py` o `voice_live.py` corriendo se conecta sola al núcleo
+("NÚCLEO EN LÍNEA"); sin núcleo, muestra una simulación de los ocho estados.
+Para verla reaccionar a la voz de Jarvis sin micrófono:
+
+```bash
+.venv/Scripts/python scripts/hud_demo.py
+```
+
+Para trabajar el HUD en el navegador con recarga en caliente: `npm run dev`
+dentro de `hud/` y abrir http://127.0.0.1:5173 (`?fps=1` muestra los fps).
+
 ### Inspeccionar la memoria
 
 ```bash
@@ -223,11 +258,15 @@ core/jarvis/     el cerebro y el cuerpo (Python)
   voice/         wake · vad · stt · tts · interrupción      (Fase 1) ✅
   cognition/     router · cascada · prompts · confianza      (Fase 2) ✅
   memory/        cinco capas · recuperación · consolidación  (Fase 3) ✅
+  hudlink/       WebSocket local núcleo → HUD                 (Fase 4) ✅
   tools/         servidores MCP                              (Fases 6-7)
   guardian/      permisos · confirmación · auditoría         (Fase 8)
   bridge/        servidor WS · autenticación · presencia     (Fase 9)
   service/       daemon · supervisor · bandeja               (Fase 11)
 hud/             Electron + React + Three.js                 (Fases 4-5)
+  electron/      ventana sin marco, transparente, siempre encima
+  src/core3d/    las seis capas de la esfera y sus estados   (Fase 4) ✅
+  src/design/    tokens de diseño: la única fuente de verdad
 mobile/          Expo                                        (Fase 10)
 shared/protocol/ esquemas JSON compartidos por los tres
 config/          jarvis.toml y policy.toml

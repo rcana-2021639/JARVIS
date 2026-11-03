@@ -4,6 +4,97 @@ Bitácora de fases. Cada sesión lee este archivo antes de escribir una sola lí
 
 ---
 
+## FASE 4 — NÚCLEO 3D REACTIVO AL AUDIO — **COMPLETA** (con dos criterios por confirmar a mano: el banco de 5 minutos y el juicio estético)
+
+Fecha: 2026-11-03
+
+### Entregado
+
+**El HUD** — `hud/` (Electron 33 + Vite 5 + React 18 + React Three Fiber 8 + drei + postprocessing, TypeScript estricto, cero `any`)
+
+| Archivo | Qué contiene |
+|---|---|
+| `electron/main.cts`, `preload.cts` | Ventana sin marco, transparente, siempre encima (`floating`), arrastrable por la barra, con aislamiento de contexto y sandbox. Oculta, deja de pedir cuadros. `JARVIS_HUD_SELFTEST=segundos` es el banco: FPS por segundo, capturas cada 2,5 s y propiedades de la ventana |
+| `src/design/tokens.ts` | **La única fuente de verdad** de colores, tipografía, geometría y movimiento: constantes de TypeScript y, con `applyTokens`, variables CSS. Incluye la curva estándar evaluada en JS (`ease`) para los shaders |
+| `src/core3d/Seed.tsx` | Capa 1: semilla emisiva con pulso de 4 s y corona radial |
+| `src/core3d/ParticleShell.tsx` | Capa 2: 30.000 puntos en espiral de Fibonacci, ruido simplex 3D en el shader de vértices, `uAudio[32]`: cada partícula se mueve con la banda de su latitud (interpolada, modulada por ruido), color de base a acento por velocidad radial |
+| `src/core3d/Rings.tsx` | Capa 3: 4 anillos con graduación cada 5° (larga cada 30°), velocidades en razones irracionales (φ, √2, e) para que nunca se sincronicen; se alinean en un plano al EJECUTAR, barra de progreso orbital y anillo exterior de escucha/espera |
+| `src/core3d/Filaments.tsx` | Capa 4: hasta 48 curvas de Bézier que nacen, se sostienen y se desvanecen; cuántas, según la carga cognitiva. Una sola geometría, una llamada de dibujo |
+| `src/core3d/EnergyField.tsx` | Capa 5: caparazón de fresnel, transparente al centro y brillante al borde |
+| `src/core3d/Effects.tsx` | Capa 6: bloom con umbral bajo, aberración cromática mínima, viñeta y grano al 3 % |
+| `src/core3d/states.ts` | Los 8 estados como juegos de parámetros; `StateBlender` interpola desde donde vaya en 800 ms con la curva estándar, sin asignar memoria por cuadro |
+| `src/core3d/Reactor.tsx` | La escena: reloj común, nivel de detalle adaptativo (30k → 20k → 12k → 7k partículas y densidad de píxeles) con `PerformanceMonitor`, suspensión con la ventana oculta, sonda de FPS |
+| `src/hooks/useAudioReactive.ts` | Nivel, 32 bandas, graves y golpe, suavizados (ataque rápido, relajación lenta) y fuera del estado de React |
+| `src/services/core.ts`, `protocol.ts` | Cliente WebSocket con reconexión y retroceso; sin núcleo en 1,5 s, **simulación** de los 8 estados con voz sintética; mensajes validados (lo desconocido se descarta) |
+| `src/App.tsx`, `styles.css` | Marco de esquinas cortadas con borde de 1 px, barra para arrastrar, estado en texto y FPS en desarrollo (`?fps=1`) |
+
+**En el núcleo**
+
+- `core/jarvis/voice/spectrum.py` — 32 bandas logarítmicas de 80 Hz a 8 kHz por bloque (FFT de 512, ~0,15 ms).
+- `AudioLevel.bands` y `TtsAmplitude.bands` — el micrófono al escuchar y Piper al hablar ya publican sus bandas (esquemas actualizados).
+- `core/jarvis/hudlink/` — `HudFeed` traduce el bus a cuatro mensajes (hola, estado, audio, carga cognitiva) y `HudServer` los reparte por WebSocket **solo en 127.0.0.1** (otra dirección se rechaza), con una cola corta por HUD que descarta lo viejo. `start_hud` lo levanta sin que su falla tumbe a Jarvis.
+- `[ui]` en `jarvis.toml`: `hud_enabled`, `hud_host`, `hud_port` (8766). `jarvis_chat.py` y `voice_live.py` lo abren solos.
+- `scripts/hud_demo.py` — recorre los 8 estados con la voz real de Piper: el HUD conectado al núcleo sin micrófono ni modelos.
+
+**Dependencias** (con permiso del usuario) — npm en `hud/` (no versionado `node_modules/`; sí `package-lock.json`) y `websockets` en Python.
+
+**Pruebas** — 371 en Python (11 nuevas en `test_hudlink.py`: bandas, traducción del bus, saludo y cambios por WebSocket real, cliente atrasado, interfaz local). El HUD: `npm run typecheck` (estricto, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) y `npm run build`.
+
+### Mediciones — i5-10500, Intel UHD 630 integrada, ventana de 634 × 634
+
+| Medida | Resultado | Meta | |
+|---|---|---|---|
+| FPS durante 5 minutos, Electron, con el núcleo real hablando por Piper (`JARVIS_HUD_SELFTEST=300` + `hud_demo.py`) | **60 fps, mínimo 60, en 38 s seguidos** (más una corrida de 25 s: 60 desde el segundo 2) | 60 sostenidos 5 min | ⚠️ |
+| Corridas de 5 minutos | interrumpidas dos veces a mano (a los 3 min la ventana se redimensionó y cerró; en la segunda se minimizó a los 5 s) | | sin dato |
+| Análisis de bandas por bloque | ~0,15 ms | < 32 ms (el bloque) | ✅ |
+
+### Criterios de aceptación
+
+- [x] La esfera responde visiblemente y en tiempo real a la voz — con la voz real de Jarvis (Piper → 32 bandas → WebSocket → `uAudio`), verificado en capturas de Electron. La del usuario usa el mismo camino (`voice.level` con bandas en ESCUCHANDO, probado en `test_hudlink.py`), pero no se probó con el micrófono en vivo en esta sesión.
+- [x] Los ocho estados se ven claramente distintos — capturas de Electron: DORMIDO ámbar tenue y respirando; DESPIERTO expansión cian y anillo exterior; ESCUCHANDO cian con picos ámbar; PENSANDO colapso violeta-cian con espiral y filamentos; HABLANDO ámbar deformado por la voz; EJECUTANDO menta con anillos alineados y progreso orbital; ERROR carmesí con sacudida y fragmentación que se recompone; CONFIRMANDO carmesí pulsante, todo detenido, anillo de espera.
+- [x] Las transiciones son suaves — `StateBlender`: 800 ms con cubic-bezier(0.16, 1, 0.3, 1), desde el punto donde iba la animación; el error es un impulso que decae en 0,9 s.
+- [ ] **60 fps sostenidos durante 5 minutos continuos** — PENDIENTE de una corrida sin interrupciones. Lo medido: 38 s seguidos a 60 fps exactos (mínimo 60) con el núcleo hablando por Piper, en la GPU integrada. Las dos corridas de 5 minutos se interrumpieron a mano (la ventana siempre encima estorbaba) y no se relanzó. Para correrlo: `hud_demo.py --seconds 315` y, en `hud/`, `JARVIS_HUD_SELFTEST=300 JARVIS_HUD_REPORT=<carpeta> npx electron .`; el reporte queda en `<carpeta>/report.json` (y `fps-partial.json` cada 10 s).
+- [x] La ventana es transparente, sin marco y siempre encima — `alwaysOnTop: true` en el reporte de la autoprueba, y una captura del escritorio con el HUD encima de otra aplicación muestra el escritorio por las esquinas cortadas.
+- [x] Sin el núcleo corriendo, el HUD muestra la simulación sin crashear — "SIMULACIÓN" en la barra; al levantar el núcleo pasa solo a "NÚCLEO EN LÍNEA" y vuelve a simular si se cae.
+- [ ] **Una captura se ve como el reactor de Iron Man, no como una demo de librería** — a mi juicio sí (bloom, corona, fresnel, anillos de instrumento, paleta Tron), pero es un criterio estético: lo tiene que aprobar el usuario viendo `npm run electron`.
+
+### Decisiones tomadas
+
+- **DECISIÓN**: el HUD habla con el núcleo por un WebSocket propio en 127.0.0.1 y no por el puente de la Fase 9, **porque** el puente es remoto, cifrado y autenticado; el HUD está en la misma máquina y necesita 60 mensajes por segundo sin ceremonia. Una dirección que no sea local se rechaza en el constructor.
+- **DECISIÓN**: el núcleo manda una vista compacta (estado, audio, carga), no el bus crudo, **porque** el HUD dibuja a 60 fps y no necesita transcripciones ni trazas; además, así lo que dice el usuario no viaja a un proceso que no lo necesita.
+- **DECISIÓN**: el audio viaja ya analizado (32 bandas) y no como PCM, **porque** son 32 números contra ~500 muestras por bloque y la FFT en Python cuesta 0,15 ms.
+- **DECISIÓN**: las bandas se asignan por latitud (graves en el ecuador, agudos en los polos), interpoladas entre vecinas y moduladas por ruido. Por banda entera se veían escalones horizontales; sin ruido, simetría de linterna.
+- **DECISIÓN**: todo lo que cambia por cuadro (audio, parámetros del estado, uniformes) vive fuera del estado de React y se escribe en `useFrame`. React solo re-renderiza al cambiar el estado del enlace o el nivel de detalle.
+- **DECISIÓN**: la ventana tiene fondo `void` dentro del marco y es transparente solo fuera de él (las esquinas cortadas), **porque** el bloom, la viñeta y el grano del postproceso están pensados para un fondo opaco; sobre alfa, el resplandor del bloom no tiene contra qué sumarse.
+- **DECISIÓN**: el violeta de PENSANDO es `#7C4DFF`: el documento dice "violeta-cian" pero no da el valor. Vive en `tokens.ts` como `violet`.
+- **DECISIÓN**: el nivel de detalle baja primero partículas y densidad de píxeles, luego pasadas de bloom; nunca la tasa de cuadros. Con la ventana oculta, `frameloop="never"`.
+- **DECISIÓN**: versiones fijadas y probadas juntas (React 18 + R3F 8 + three 0.169), no las últimas, **porque** R3F 9 exige React 19 y el resto del ecosistema (drei, postprocessing) cambia en pares.
+
+### Deuda técnica
+
+- **No se probó con la voz del usuario por micrófono.** El camino es el mismo que el de Piper y está probado con eventos, pero falta verlo en vivo: `voice_live.py` + `npm run electron`.
+- **Electron se instaló sin que npm corriera los scripts de instalación de esbuild** (npm 11 los bloquea por defecto); Vite funciona igual con el binario precompilado. Si `npm run build` fallara en otra máquina: `npm install-scripts approve esbuild`.
+- **El paquete del HUD pesa 1 MB** (three + postprocessing). Se carga una vez desde disco; no vale partirlo hoy.
+- **El disco C: estuvo lleno** durante esta sesión (0 bytes libres): la primera instalación de npm falló. Hay ~10 GB en la caché de npm y 0,5 GB en la de pip que se pueden limpiar.
+- **La consolidación real de la Fase 3 no se volvió a medir con el filtro nuevo** de hechos (`about_user`): ver Fase 3.
+
+### Para la Fase 5 — HUD completo
+
+- El HUD ya tiene el canal: agregar mensajes en `HudFeed` (Python) y en `protocol.ts` (TypeScript). Para el chat y el timeline, considerar mandar `cognition.response.chunk` y `cognition.completed` (sin el texto del usuario si no hace falta).
+- `Reactor` es un componente: los paneles van alrededor en `App.tsx`. Los tokens, las fuentes (Orbitron, JetBrains Mono, Rajdhani) y el marco de esquinas cortadas ya están.
+- `memory.consolidation.finished` trae el `ConsolidationReport` para mostrar "qué aprendí anoche".
+- Banco de rendimiento: `JARVIS_HUD_SELFTEST=300 JARVIS_HUD_REPORT=carpeta npm run electron` con `hud_demo.py` corriendo.
+
+```bash
+cd hud && npm install && npm run build && npm run electron
+```
+
+```bash
+.venv/Scripts/python scripts/hud_demo.py
+```
+
+---
+
 ## FASE 3 — SISTEMA DE MEMORIA — **COMPLETA**
 
 Fecha: 2026-11-03

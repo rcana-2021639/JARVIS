@@ -233,3 +233,8 @@ show_fps = false
 particle_count = 30000        # el nivel de detalle adaptativo lo baja solo
 ui_sounds = true
 target_fps = 60
+# El nucleo alimenta al HUD por un WebSocket local (estado, audio en 32 bandas, carga).
+# Solo 127.0.0.1: el acceso remoto es el puente cifrado de la Fase 9.
+hud_enabled = true
+hud_host = "127.0.0.1"
+hud_port = 8766
