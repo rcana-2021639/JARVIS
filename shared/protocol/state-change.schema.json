@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "CoreState": {
+      "description": "Los ocho estados del nucleo. Gobiernan la esfera 3D del HUD (Fase 4).",
+      "enum": [
+        "DORMIDO",
+        "DESPIERTO",
+        "ESCUCHANDO",
+        "PENSANDO",
+        "HABLANDO",
+        "EJECUTANDO",
+        "ERROR",
+        "CONFIRMANDO"
+      ],
+      "title": "CoreState",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Una transicion del estado del nucleo. Viaja en `core.state.changed`.\n\nLleva el estado anterior y el nuevo porque el timeline del HUD dibuja\ntransiciones, no estados sueltos: \"ESCUCHANDO -> HABLANDO por barge-in\" dice\nmucho mas que \"HABLANDO\".",
+  "properties": {
+    "changed_at": {
+      "format": "date-time",
+      "title": "Changed At",
+      "type": "string"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    },
+    "current": {
+      "$ref": "#/$defs/CoreState",
+      "description": "Estado al que se entra."
+    },
+    "previous": {
+      "$ref": "#/$defs/CoreState",
+      "description": "Estado del que se sale."
+    },
+    "reason": {
+      "description": "Causa corta y legible: wake, silencio, barge_in, respuesta...",
+      "minLength": 1,
+      "title": "Reason",
+      "type": "string"
+    },
+    "source": {
+      "description": "Modulo que provoco la transicion.",
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "previous",
+    "current",
+    "reason",
+    "source"
+  ],
+  "title": "StateChange",
+  "type": "object"
+}

@@ -31,6 +31,7 @@ __all__ = [
     "MemoryKind",
     "PrivacyMode",
     "RiskLevel",
+    "SpeechEndReason",
 ]
 
 
@@ -76,6 +77,22 @@ class RiskLevel(StrEnum):
 
     NEGRO = "NEGRO"
     """Prohibido siempre. No existe frase que lo autorice."""
+
+
+class SpeechEndReason(StrEnum):
+    """Por que se cerro una escucha. Viaja en `voice.speech.ended`."""
+
+    SILENCIO = "SILENCIO"
+    """El caso normal: el usuario dejo de hablar y paso `vad_silence_ms`."""
+
+    TOPE = "TOPE"
+    """Se alcanzo `max_listen_s`. Corte elegante, se transcribe lo que hubo."""
+
+    SIN_HABLA = "SIN_HABLA"
+    """Tras la palabra clave nadie hablo. Se emite una transcripcion vacia."""
+
+    CANCELADA = "CANCELADA"
+    """El pipeline se detuvo a media escucha. No se transcribe nada."""
 
 
 class CascadeLevel(IntEnum):

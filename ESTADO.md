@@ -4,6 +4,110 @@ Bitácora de fases. Cada sesión lee este archivo antes de escribir una sola lí
 
 ---
 
+## FASE 1 — PIPELINE DE VOZ — **COMPLETA** (con dos metas que este hardware no alcanza)
+
+Fecha: 2026-10-26
+
+### Entregado
+
+**Pipeline** — `core/jarvis/voice/`
+
+| Archivo | Qué contiene |
+|---|---|
+| `pipeline.py` | `VoicePipeline`: la máquina de estados DORMIDO → DESPIERTO → ESCUCHANDO → (final) → DORMIDO, y HABLANDO con barge-in. Publica todo al bus |
+| `engines.py` | Los seis protocolos: `AudioSource`, `WakeWordDetector`, `VoiceActivityDetector`, `SpeechToText`, `TextToSpeech`, `AudioSink` |
+| `audio.py` | `RingBuffer` (tamaño fijo, solo RAM), nivel RMS/pico, conversiones PCM, WAV para scripts |
+| `vad.py` | `EnergyVAD` (respaldo sin modelo) y `EndpointDetector` (inicio tras `vad_min_speech_ms`, fin tras `vad_silence_ms`) |
+| `text.py` | `strip_wake_word`: quita "Jarvis", "Hey Jarvis", "Yarvis", "...vis" del principio del texto |
+| `io.py` | `ArraySource` y `MemorySink`: el pipeline completo sin hardware |
+| `models.py` | Rutas de los modelos y su descarga |
+| `factory.py` | Construye los motores reales desde `VoiceConfig` |
+| `adapters/` | PortAudio (micrófono y altavoces, con remuestreo en flujo), openWakeWord, Silero VAD, faster-whisper, Piper |
+
+**Contratos nuevos** — `AudioLevel`, `WakeDetection`, `SpeechActivity`, `SpeechOutput`, `TtsAmplitude` (en `voice.py`), `StateChange` (en `system.py`) y el enum `SpeechEndReason`. Exportados a `shared/protocol/` (19 archivos).
+
+**Configuración** — `VoiceConfig` pasó de 13 a 33 campos, todos documentados en `config/jarvis.toml`. Nada de números incrustados.
+
+**Scripts**
+
+- `scripts/download_voice_models.py` — baja Whisper, la voz de Piper y openWakeWord a `models/` (no versionado)
+- `scripts/voice_bench.py` — el banco de la fase: Piper dice órdenes, el pipeline completo las transcribe y se miden latencias desde los eventos del bus
+- `scripts/voice_live.py` — la demostración con micrófono: "Hey Jarvis" + orden, y Jarvis repite lo que oyó
+
+**Pruebas** — 181 en total (63 nuevas). `test_voice_pipeline.py` prueba la orquestación con motores falsos deterministas (`tests/voice_fakes.py`); `test_voice_engines.py` prueba los motores reales y se salta sola si faltan los modelos.
+
+### Mediciones — i5-10500 sin GPU, `scripts/voice_bench.py` en tiempo real
+
+| Medida | Resultado | Meta | |
+|---|---|---|---|
+| Transcripción final (fin de frase → texto), p50 | **886 ms** (p95 1156) | < 400 ms | ❌ |
+| Precisión (WER medio, 6 órdenes) | 0.17 | — | errores: "70%" por "setenta por ciento", "Recuerda me" |
+| Palabra clave, costo por bloque de 32 ms, p95 | 6.6 ms (20 %) | < 32 ms | ✅ |
+| Silero VAD, costo por bloque, p95 | 1.8 ms (6 %) | < 32 ms | ✅ |
+| TTS, tiempo hasta el primer audio | 40 / 107 / 166 ms (1, 5 y 9 palabras) | — | ✅ |
+| Detector real "Hey Jarvis" (voz inglesa) | 6 de 6, cero falsos positivos con frases en español | — | ✅ |
+
+Cómo se llegó a `base`: medido, `small` tarda 2.5 s por frase, `base` 0.85 s y `tiny` 0.4 s con errores graves. Detectar el idioma automáticamente **triplica** el costo (otra pasada del codificador), por eso `stt_language = "es"`. Y un `stt_prompt` con vocabulario de órdenes hace que `base` acierte lo mismo que `small`: sin él escribe "Maja el brillo" y "Harbys, su el volumen".
+
+### Criterios de aceptación
+
+- [x] `mypy core/ --strict` limpio — 48 archivos
+- [x] `ruff check core/ tests/ scripts/` limpio
+- [x] `pytest` verde — 181 pruebas, ~19 s
+- [x] La palabra clave es sagrada: sin ella no sale ni un evento de voz, ni se llama al VAD ni a Whisper (`test_sin_palabra_clave_no_sale_nada`)
+- [x] Preroll de 500 ms rescatado del buffer circular (`test_el_preroll_rescata_el_audio_previo_al_disparo`)
+- [x] "Jarvis" y silencio → transcripción vacía, no error (`test_jarvis_y_silencio_da_una_transcripcion_vacia`)
+- [x] Nivel a ~30 Hz y amplitud del TTS a 60 Hz, sincronizada con lo que suena
+- [x] Barge-in: la palabra clave calla a Jarvis y pasa directo a escuchar
+- [x] Nada falla en silencio: Whisper roto, micrófono desconectado o micrófono mudo llegan al bus como `core.error`
+- [x] Umbrales recargables en caliente (`test_la_configuracion_se_lee_en_caliente`)
+- [x] Banco `scripts/voice_bench.py` construido sobre los `trace.span` del bus
+- [ ] **Transcripción final < 400 ms** — 886 ms en esta CPU. Ver deuda.
+- [ ] **Probado con voz humana por micrófono** — este equipo no tiene micrófono funcionando (ver deuda). Probado de punta a punta con voz sintética y con los altavoces reales.
+
+### Decisiones tomadas
+
+- **DECISIÓN**: el pipeline no entra en PENSANDO tras la transcripción final, **porque** ese estado es de la cascada (Fase 2). El pipeline publica `voice.stt.final` y vuelve a DORMIDO; si nadie contesta no queda colgado en un estado ajeno.
+- **DECISIÓN**: el barge-in se dispara con la palabra clave y no con cualquier voz, **porque** sin cancelación de eco el VAD oye a Jarvis por los altavoces y se interrumpiría a sí mismo.
+- **DECISIÓN**: el tiempo del pipeline se cuenta en milisegundos de audio procesado, no de reloj, **porque** así los plazos son deterministas en las pruebas sin esperar de verdad, y con el micrófono es lo mismo.
+- **DECISIÓN**: los motores de inferencia son síncronos y el pipeline decide qué mandar a un hilo, **porque** todos envuelven bibliotecas de CPU síncronas; una fachada `async` solo escondería dónde se bloquea.
+- **DECISIÓN**: al cerrarse una frase, el micrófono vuelve a vigilar la palabra clave mientras Whisper transcribe aparte, **porque** con 0.9 s de transcripción un segundo "Jarvis" inmediato se perdía. El estado sigue en ESCUCHANDO hasta publicar la final.
+- **DECISIÓN**: los modelos se descargan con un comando explícito, nunca solos al arrancar, **porque** bajar 500 MB sin que nadie lo pida viola "local por defecto". Si falta uno, `ModelMissingError` dice qué correr.
+- **DECISIÓN**: los motores reales viven en el extra `[voice]` de `pyproject.toml` y solo los importa `voice/factory.py`, **porque** las pruebas del núcleo no deben depender de 600 MB de pesos.
+- **DECISIÓN**: `publish_idle_level = false` por defecto, **porque** sin palabra clave no debe salir nada del pipeline, ni siquiera cuánto ruido hay en la habitación.
+- **DECISIÓN**: `stt_model = "base"`, `stt_language = "es"` y `stt_partials = false` en esta máquina, **porque** son los valores medidos que dejan la latencia en ~0.9 s. Las parciales compiten por la CPU con la final y la retrasarían.
+
+### Deuda técnica y pendientes
+
+- **La meta de 400 ms no se alcanza en CPU.** Opciones, de menor a mayor esfuerzo: (1) motor `cloud` con Deepgram en streaming (el campo `stt_engine` ya existe, falta el adaptador); (2) una GPU dedicada y `large-v3-turbo`; (3) recortar el contexto del codificador de Whisper, que hoy procesa siempre 30 s aunque la frase dure 2.
+- **`hey_jarvis` no reconoce "Jarvis" pronunciado en español.** El modelo del catálogo se entrenó con voces inglesas: responde a "DYAR-vis" (0.96–0.998) pero no a "Jarvis" con jota (0.001). Con pronunciación inglesa funciona perfecto y sin falsos positivos. La solución es entrenar un modelo propio con openWakeWord (entrena con voz sintética: las voces es_MX de Piper sirven) y apuntar `wake_model` a su `.onnx`.
+- **Este equipo no tiene micrófono funcionando.** Windows no tiene entrada predeterminada; el conector Realtek se abre por WDM-KS pero nunca entrega audio (deshabilitado o sin nada enchufado), y los micrófonos Bluetooth no estaban conectados. El pipeline lo detecta a los 3 s y lo anuncia (`CaptureStalledError`). Para probar en vivo: conectar un micrófono o habilitarlo en Configuración > Sistema > Sonido, y correr `scripts/voice_live.py`.
+- **El WER del banco penaliza números**: Whisper escribe "70%" por "setenta por ciento". Para el clasificador es correcto, pero el banco lo cuenta como error. Normalizar números si llega a importar.
+- **Al interrumpir, Piper termina la frase que estaba generando**: el altavoz calla al instante, pero el hilo de síntesis no se suelta hasta acabar esa frase (decenas de ms; no se oye).
+- **Quedaron en `models/` Whisper `small` y `tiny` y la voz inglesa** de las mediciones. No se versionan, y `voice_bench.py --real-wake` usa la voz inglesa.
+
+### Para la Fase 2 — Orquestador cognitivo
+
+- **Suscríbete a `voice.stt.final`.** La carga es una `Utterance` con `is_final=True`, el texto ya sin la palabra clave y el `correlation_id` de la interacción. Puede venir vacía (`is_empty`): "Jarvis" y silencio. Contesta algo breve o nada, pero no lo trates como error.
+- **Para hablar, publica `cognition.response`** con un `Response`. El pipeline lo dice solo si `should_speak` y el texto no está vacío, con el mismo `correlation_id`. No llames a `speak()` directamente: así el HUD y la bitácora ven la respuesta.
+- **El estado PENSANDO es tuyo.** Publícalo en `core.state.changed` con un `StateChange` al empezar a resolver. El pipeline pasa a HABLANDO cuando empieza a decir la respuesta y vuelve a DORMIDO al terminar.
+- **El fast path recibe texto de `base`, no de `large`.** Las órdenes cortas salen bien gracias a `stt_prompt`, pero conviene que las reglas del nivel 1 toleren variaciones ("Sierra todas las ventanas", "al 70%"). Si una orden frecuente falla, agregar su vocabulario a `stt_prompt` cuesta cero.
+- **Para probar sin micrófono**, `ArraySource` + `MemorySink` y los falsos de `tests/voice_fakes.py` corren el pipeline entero en milisegundos.
+
+```bash
+.venv/Scripts/python -m pip install -e ".[dev,voice]"
+```
+
+```bash
+.venv/Scripts/python scripts/download_voice_models.py
+```
+
+```bash
+.venv/Scripts/python scripts/voice_bench.py
+```
+
+---
+
 ## FASE 0 — FUNDACIONES Y CONTRATOS — **COMPLETA**
 
 Fecha: 2026-08-01

@@ -1,17 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "contracts": {
+    "AudioLevel": "audio-level.schema.json",
     "AuditEntry": "audit-entry.schema.json",
     "Command": "command.schema.json",
     "Event": "event.schema.json",
     "Intent": "intent.schema.json",
     "MemoryRecord": "memory-record.schema.json",
     "Response": "response.schema.json",
+    "SpeechActivity": "speech-activity.schema.json",
+    "SpeechOutput": "speech-output.schema.json",
+    "StateChange": "state-change.schema.json",
     "SystemState": "system-state.schema.json",
     "Telemetry": "telemetry.schema.json",
     "ToolCall": "tool-call.schema.json",
     "ToolResult": "tool-result.schema.json",
-    "Utterance": "utterance.schema.json"
+    "TtsAmplitude": "tts-amplitude.schema.json",
+    "Utterance": "utterance.schema.json",
+    "WakeDetection": "wake-detection.schema.json"
   },
   "description": "Indice de los contratos compartidos entre el nucleo, el HUD y el movil.",
   "enums": "enums.json",

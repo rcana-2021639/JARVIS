@@ -5,7 +5,7 @@ en la PC, escucha por una palabra de activación, entiende lenguaje natural,
 opera el sistema operativo y las aplicaciones, recuerda todo lo que ha pasado, y
 se presenta a través de una interfaz tridimensional reactiva al sonido.
 
-Se construye en 13 fases. **Estado actual: Fase 0 completa.**
+Se construye en 13 fases. **Estado actual: Fase 1 completa.**
 
 ---
 
@@ -14,7 +14,7 @@ Se construye en 13 fases. **Estado actual: Fase 0 completa.**
 | # | Fase | Estado |
 |---|------|--------|
 | 0 | Fundaciones y contratos | ✅ Completa |
-| 1 | Pipeline de voz | Pendiente |
+| 1 | Pipeline de voz | ✅ Completa |
 | 2 | Orquestador cognitivo | Pendiente |
 | 3 | Sistema de memoria | Pendiente |
 | 4 | Núcleo 3D | Pendiente |
@@ -33,19 +33,17 @@ El detalle de lo entregado en cada fase está en [ESTADO.md](ESTADO.md).
 
 ## Qué hay hoy
 
-La Fase 0 no hace nada visible todavía — define el idioma que hablarán todos los
-módulos del resto del proyecto:
+**Fase 1 — pipeline de voz** (`core/jarvis/voice/`). Jarvis ya oye y habla:
+escucha la palabra clave, rescata el medio segundo previo del buffer circular,
+decide con Silero VAD cuándo terminaste de hablar, transcribe con
+faster-whisper y responde con Piper. Decirle la palabra clave mientras habla lo
+calla al instante. Todo lo que pasa se publica al bus: estado, nivel del
+micrófono a ~30 Hz, amplitud del habla a 60 Hz y transcripciones.
 
-- **Contratos de datos** (`core/jarvis/contracts/`) — los diez modelos Pydantic
-  que cruzan cualquier frontera del sistema, con las reglas de negocio del
-  documento maestro codificadas como validaciones.
-- **Bus de eventos** (`core/jarvis/bus/`) — pub/sub asíncrono con contrapresión,
-  reintentos y métricas. Un consumidor lento se degrada solo, sin arrastrar a
-  nadie.
-- **Configuración** (`core/jarvis/config.py`) — jerarquía de defaults → TOML →
-  entorno, con recarga en caliente.
-- **Registro** (`core/jarvis/logging.py`) — structlog con id de correlación que
-  viaja de punta a punta, y el decorador `@traced`.
+**Fase 0 — fundaciones**: los contratos de datos (`core/jarvis/contracts/`), el
+bus de eventos con contrapresión (`core/jarvis/bus/`), la configuración con
+recarga en caliente (`core/jarvis/config.py`) y el registro con id de
+correlación (`core/jarvis/logging.py`).
 
 ---
 
@@ -58,10 +56,40 @@ python -m venv .venv
 ```
 
 ```bash
-.venv/Scripts/python -m pip install -e ".[dev]"
+.venv/Scripts/python -m pip install -e ".[dev,voice]"
 ```
 
-En Linux o macOS, `.venv/bin/python` en lugar de `.venv/Scripts/python`.
+En Linux o macOS, `.venv/bin/python` en lugar de `.venv/Scripts/python`. El
+extra `voice` trae los motores locales (faster-whisper, openWakeWord, Piper y
+PortAudio); sin él, el núcleo y sus pruebas siguen funcionando.
+
+### Modelos de voz
+
+```bash
+.venv/Scripts/python scripts/download_voice_models.py
+```
+
+Baja a `models/` (no versionado) el modelo de Whisper, la voz de Piper y la
+palabra clave. Jarvis nunca descarga nada por su cuenta.
+
+### Hablar con Jarvis
+
+```bash
+.venv/Scripts/python scripts/voice_live.py
+```
+
+Di **"Hey Jarvis"** —pronunciado a la inglesa, "DYAR-vis"— y una orden. Por
+ahora te la repite: entenderla es la Fase 2. Con `--list-devices` muestra qué
+micrófonos ve.
+
+### Medir el pipeline de voz
+
+```bash
+.venv/Scripts/python scripts/voice_bench.py
+```
+
+Sintetiza órdenes, las pasa por el pipeline completo y reporta latencia,
+precisión y costo por etapa. No necesita micrófono.
 
 ### Verificar que todo está bien
 
@@ -104,7 +132,7 @@ Escribe en `shared/protocol/` un JSON Schema por contrato, para que el HUD
 core/jarvis/     el cerebro y el cuerpo (Python)
   contracts/     modelos Pydantic -- el idioma común
   bus/           publicación/suscripción de eventos
-  voice/         wake · vad · stt · tts · interrupción      (Fase 1)
+  voice/         wake · vad · stt · tts · interrupción      (Fase 1) ✅
   cognition/     router · cascada · prompts · confianza      (Fase 2)
   memory/        cinco capas · consolidación                 (Fase 3)
   tools/         servidores MCP                              (Fases 6-7)
@@ -142,6 +170,10 @@ Según la tabla de VRAM del documento maestro eso implica modelo local pequeño 
 CPU y escalado más frecuente a la nube. Los valores por defecto de
 `config/jarvis.toml` ya están calibrados para eso y están marcados con comentarios.
 Con una GPU dedicada hay que subir `stt_model` y `local_model`.
+
+Medido en la Fase 1 (i5-10500): la transcripción final tarda ~0.9 s con
+Whisper `base`, y la meta es 0.4 s. Las mediciones completas están en
+[ESTADO.md](ESTADO.md).
 
 ---
 

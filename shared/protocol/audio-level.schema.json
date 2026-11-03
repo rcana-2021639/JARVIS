@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Nivel del microfono en un bloque de captura, ~30 veces por segundo.\n\nAlimenta la esfera del HUD mientras Jarvis escucha. Es un flujo de alta\nfrecuencia donde lo reciente vale mas que lo completo: sus consumidores se\nsuscriben con `OverflowPolicy.DROP_OLDEST` y una cola pequena.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Interaccion en curso. None si se publica en reposo.",
+      "title": "Correlation Id"
+    },
+    "peak": {
+      "description": "Pico absoluto del bloque, de 0 a 1.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Peak",
+      "type": "number"
+    },
+    "rms": {
+      "description": "Energia RMS del bloque, de 0 a 1.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Rms",
+      "type": "number"
+    },
+    "speech_probability": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Probabilidad de voz segun el VAD. None si el VAD no corrio en este bloque.",
+      "title": "Speech Probability"
+    }
+  },
+  "required": [
+    "rms",
+    "peak"
+  ],
+  "title": "AudioLevel",
+  "type": "object"
+}

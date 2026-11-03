@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "Emotion": {
+      "description": "Intencion expresiva de una respuesta hablada.\n\nDeliberadamente corta. La personalidad de Jarvis es seca y precisa: no hay\nentusiasmo ni servilismo que expresar, asi que no hay enum que lo soporte.",
+      "enum": [
+        "NEUTRAL",
+        "AFIRMATIVA",
+        "ALERTA",
+        "ERROR",
+        "INTERROGATIVA"
+      ],
+      "title": "Emotion",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Ciclo de vida de una respuesta hablada: inicio y fin del TTS.",
+  "properties": {
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Interaccion a la que responde. None en avisos del sistema.",
+      "title": "Correlation Id"
+    },
+    "duration_ms": {
+      "default": 0.0,
+      "description": "Audio efectivamente reproducido. Cero en el evento de inicio.",
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "emotion": {
+      "$ref": "#/$defs/Emotion",
+      "default": "NEUTRAL",
+      "description": "Intencion expresiva."
+    },
+    "first_audio_ms": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cuanto tardo en sonar el primer audio desde que se pidio hablar.",
+      "title": "First Audio Ms"
+    },
+    "interrupted": {
+      "default": false,
+      "description": "Si el usuario lo interrumpio antes de terminar.",
+      "title": "Interrupted",
+      "type": "boolean"
+    },
+    "text": {
+      "description": "Lo que Jarvis dice o dijo.",
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "title": "SpeechOutput",
+  "type": "object"
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Amplitud del habla de Jarvis, ~60 veces por segundo, sincronizada con lo que suena.",
+  "properties": {
+    "amplitude": {
+      "description": "Envolvente del bloque, de 0 a 1.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Amplitude",
+      "type": "number"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correlation Id"
+    }
+  },
+  "required": [
+    "amplitude"
+  ],
+  "title": "TtsAmplitude",
+  "type": "object"
+}

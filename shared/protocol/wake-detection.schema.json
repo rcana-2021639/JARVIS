@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "La palabra clave se disparo. Es donde nace el id de correlacion.",
+  "properties": {
+    "barge_in": {
+      "default": false,
+      "description": "Si el disparo interrumpio a Jarvis mientras hablaba.",
+      "title": "Barge In",
+      "type": "boolean"
+    },
+    "correlation_id": {
+      "description": "Interaccion que empieza aqui.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "keyword": {
+      "description": "Palabra o modelo que disparo.",
+      "minLength": 1,
+      "title": "Keyword",
+      "type": "string"
+    },
+    "preroll_ms": {
+      "description": "Audio previo al disparo que se conservo para no perder silabas.",
+      "minimum": 0,
+      "title": "Preroll Ms",
+      "type": "integer"
+    },
+    "score": {
+      "description": "Confianza del detector en el disparo.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Score",
+      "type": "number"
+    }
+  },
+  "required": [
+    "keyword",
+    "score",
+    "preroll_ms",
+    "correlation_id"
+  ],
+  "title": "WakeDetection",
+  "type": "object"
+}

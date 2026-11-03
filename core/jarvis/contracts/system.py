@@ -9,7 +9,7 @@ from pydantic import Field
 from jarvis.contracts.base import BaseContract, CorrelationId, utc_now
 from jarvis.contracts.enums import CascadeLevel, CoreState, PrivacyMode
 
-__all__ = ["SystemState", "Telemetry"]
+__all__ = ["StateChange", "SystemState", "Telemetry"]
 
 
 class Telemetry(BaseContract):
@@ -148,3 +148,22 @@ class SystemState(BaseContract):
     def cloud_allowed(self) -> bool:
         """Si en este momento esta permitido llegar al nivel 3 de la cascada."""
         return self.privacy_mode is not PrivacyMode.LOCAL_ONLY and not self.budget_exhausted
+
+
+class StateChange(BaseContract):
+    """Una transicion del estado del nucleo. Viaja en `core.state.changed`.
+
+    Lleva el estado anterior y el nuevo porque el timeline del HUD dibuja
+    transiciones, no estados sueltos: "ESCUCHANDO -> HABLANDO por barge-in" dice
+    mucho mas que "HABLANDO".
+    """
+
+    previous: CoreState = Field(description="Estado del que se sale.")
+    current: CoreState = Field(description="Estado al que se entra.")
+    reason: str = Field(
+        min_length=1,
+        description="Causa corta y legible: wake, silencio, barge_in, respuesta...",
+    )
+    source: str = Field(min_length=1, description="Modulo que provoco la transicion.")
+    correlation_id: CorrelationId | None = Field(default=None)
+    changed_at: datetime = Field(default_factory=utc_now)

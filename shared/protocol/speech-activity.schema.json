@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "SpeechEndReason": {
+      "description": "Por que se cerro una escucha. Viaja en `voice.speech.ended`.",
+      "enum": [
+        "SILENCIO",
+        "TOPE",
+        "SIN_HABLA",
+        "CANCELADA"
+      ],
+      "title": "SpeechEndReason",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Inicio o fin de una frase segun el detector de actividad de voz.",
+  "properties": {
+    "correlation_id": {
+      "description": "Interaccion a la que pertenece.",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "duration_ms": {
+      "description": "Habla acumulada hasta este punto. Cero en el evento de inicio.",
+      "minimum": 0.0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpeechEndReason"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Por que se cerro la escucha. Solo en el evento de fin."
+    }
+  },
+  "required": [
+    "duration_ms",
+    "correlation_id"
+  ],
+  "title": "SpeechActivity",
+  "type": "object"
+}

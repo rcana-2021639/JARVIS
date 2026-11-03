@@ -39,12 +39,20 @@ from jarvis.contracts.enums import (
     MemoryKind,
     PrivacyMode,
     RiskLevel,
+    SpeechEndReason,
 )
 from jarvis.contracts.events import Event
 from jarvis.contracts.memory import MemoryRecord
-from jarvis.contracts.system import SystemState, Telemetry
+from jarvis.contracts.system import StateChange, SystemState, Telemetry
 from jarvis.contracts.tools import ToolCall, ToolResult
-from jarvis.contracts.voice import Utterance
+from jarvis.contracts.voice import (
+    AudioLevel,
+    SpeechActivity,
+    SpeechOutput,
+    TtsAmplitude,
+    Utterance,
+    WakeDetection,
+)
 
 #: Los contratos que se exportan como esquema JSON a shared/protocol/.
 #: Si agregas un contrato nuevo, agregalo aqui o el HUD no lo vera nunca.
@@ -60,10 +68,18 @@ EXPORTED_CONTRACTS: tuple[type[BaseContract], ...] = (
     SystemState,
     AuditEntry,
     Event,
+    # Fase 1: lo que el pipeline de voz publica para el HUD.
+    AudioLevel,
+    WakeDetection,
+    SpeechActivity,
+    SpeechOutput,
+    TtsAmplitude,
+    StateChange,
 )
 
 __all__ = [
     "EXPORTED_CONTRACTS",
+    "AudioLevel",
     "AuditEntry",
     "BaseContract",
     "CascadeLevel",
@@ -81,11 +97,17 @@ __all__ = [
     "PrivacyMode",
     "Response",
     "RiskLevel",
+    "SpeechActivity",
+    "SpeechEndReason",
+    "SpeechOutput",
+    "StateChange",
     "SystemState",
     "Telemetry",
     "ToolCall",
     "ToolResult",
+    "TtsAmplitude",
     "Utterance",
+    "WakeDetection",
     "new_correlation_id",
     "new_id",
     "utc_now",

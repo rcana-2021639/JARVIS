@@ -23,7 +23,7 @@ recompilar nada.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import (
@@ -83,7 +83,24 @@ class VoiceConfig(_Section):
         default=None,
         description="Nombre del microfono. None usa el dispositivo por defecto del sistema.",
     )
+    output_device: str | None = Field(
+        default=None,
+        description="Nombre de la salida de audio. None usa la salida por defecto del sistema.",
+    )
     sample_rate: int = Field(default=16000, gt=0, description="Frecuencia de muestreo en Hz.")
+    frame_ms: int = Field(
+        default=32,
+        gt=0,
+        le=200,
+        description=(
+            "Tamano del bloque de captura. 32ms son 512 muestras a 16kHz: lo que "
+            "Silero VAD procesa de un golpe y lo que da el medidor de nivel a ~30Hz."
+        ),
+    )
+    models_dir: Path = Field(
+        default=Path("models"),
+        description="Donde viven los modelos de voz descargados. Relativa a la raiz.",
+    )
     ring_buffer_seconds: float = Field(
         default=3.0,
         gt=0,
@@ -93,6 +110,19 @@ class VoiceConfig(_Section):
         ),
     )
     wake_word: str = Field(default="jarvis", min_length=1, description="Palabra de activacion.")
+    wake_engine: Literal["openwakeword", "none"] = Field(
+        default="openwakeword",
+        description="Detector de palabra clave. 'none' solo para pruebas: nada despierta a Jarvis.",
+    )
+    wake_model: str = Field(
+        default="hey_jarvis",
+        min_length=1,
+        description=(
+            "Modelo de openWakeWord: un nombre del catalogo oficial o la ruta a un "
+            ".onnx propio. El catalogo trae 'hey_jarvis'; un modelo entrenado solo "
+            "con 'Jarvis' se deja en models/ y se apunta aqui."
+        ),
+    )
     wake_threshold: float = Field(
         default=0.5,
         ge=0.0,
@@ -112,27 +142,108 @@ class VoiceConfig(_Section):
             "empieza pegada a la palabra clave y esas silabas no se pueden perder."
         ),
     )
+    vad_engine: Literal["silero", "energy"] = Field(
+        default="silero",
+        description=(
+            "Detector de actividad de voz. 'energy' no necesita modelo pero se "
+            "confunde con ruido de fondo; es el respaldo si Silero no carga."
+        ),
+    )
+    vad_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Probabilidad de voz a partir de la cual un bloque cuenta como habla.",
+    )
+    vad_min_speech_ms: int = Field(
+        default=150,
+        ge=0,
+        description="Habla continua minima para dar por empezada una frase. Filtra golpes.",
+    )
     vad_silence_ms: int = Field(
         default=700,
         gt=0,
         description="Silencio que marca el fin de una frase.",
+    )
+    speech_start_timeout_s: float = Field(
+        default=5.0,
+        gt=0,
+        description=(
+            "Si tras la palabra clave nadie habla en este plazo, la escucha se "
+            "cierra con una transcripcion vacia. Es un caso normal, no un error."
+        ),
     )
     max_listen_s: float = Field(
         default=30.0,
         gt=0,
         description="Tope de escucha continua, con corte elegante.",
     )
+    publish_idle_level: bool = Field(
+        default=False,
+        description=(
+            "Publicar el nivel del microfono tambien en DORMIDO. Apagado por "
+            "defecto: sin palabra clave no sale nada del pipeline, ni siquiera "
+            "cuanto ruido hay en la habitacion."
+        ),
+    )
     stt_engine: str = Field(default="local", description="Motor de transcripcion: local o cloud.")
     stt_model: str = Field(
-        default="small",
+        default="base",
         description=(
-            "Modelo de faster-whisper. DECISION: 'small' y no 'large-v3-turbo' "
-            "porque esta maquina no tiene GPU dedicada y el grande en CPU no "
-            "llega ni de lejos a la meta de latencia. Ver ESTADO.md."
+            "Modelo de faster-whisper. DECISION: 'base' y no 'small' ni "
+            "'large-v3-turbo' porque esta maquina no tiene GPU dedicada. Medido en "
+            "el i5-10500: small tarda ~2.5 s por frase y base ~0.85 s; con "
+            "`stt_prompt` base iguala a small en ordenes cortas. Ver ESTADO.md."
+        ),
+    )
+    stt_device: str = Field(default="cpu", description="cpu o cuda para faster-whisper.")
+    stt_compute_type: str = Field(
+        default="int8",
+        description="Cuantizacion de faster-whisper. int8 es la mas rapida en CPU.",
+    )
+    stt_beam_size: int = Field(
+        default=1,
+        gt=0,
+        description="Busqueda en haz. 1 es voraz: menos precision, mucha menos latencia.",
+    )
+    stt_language: Literal["auto", "es", "en"] = Field(
+        default="es",
+        description=(
+            "Idioma fijo, o 'auto' para elegir entre espanol e ingles en cada "
+            "frase. DECISION: 'es' por defecto porque detectar el idioma triplica "
+            "el costo de la transcripcion en CPU (0.8 s -> 2.5 s con base)."
+        ),
+    )
+    stt_prompt: str = Field(
+        default=(
+            "Jarvis, sube el volumen. Baja el brillo. Abre el navegador. Pon musica en Spotify."
+        ),
+        description=(
+            "Texto que orienta a Whisper hacia el vocabulario de ordenes. Sin el, "
+            "base escribe 'Maja el brillo' y 'Harbys, su el volumen'; con el, acierta. "
+            "Vacio lo desactiva."
+        ),
+    )
+    stt_partials: bool = Field(
+        default=True,
+        description="Transcribir en vivo mientras el usuario habla, para que el HUD muestre texto.",
+    )
+    stt_partial_interval_ms: int = Field(
+        default=700,
+        gt=0,
+        description=(
+            "Cada cuanto se lanza una transcripcion parcial. Si la anterior no "
+            "termino, se salta: las parciales nunca se encolan ni frenan la final."
         ),
     )
     tts_engine: str = Field(default="local", description="Motor de sintesis: local o cloud.")
     tts_voice: str = Field(default="es_MX-claude-high", description="Voz de Piper.")
+    tts_amplitude_hz: int = Field(
+        default=60,
+        gt=0,
+        le=240,
+        description="Frecuencia a la que se publica la amplitud del habla para el HUD.",
+    )
     barge_in_enabled: bool = Field(
         default=True,
         description="Si hablar encima de Jarvis lo calla al instante.",

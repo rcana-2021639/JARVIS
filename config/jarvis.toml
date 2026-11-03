@@ -22,25 +22,52 @@ log_file = "logs/jarvis.log"
 # -----------------------------------------------------------------------------
 [voice]
 # input_device = "Microfono (Realtek)"   # None usa el dispositivo por defecto
+# output_device = "Auriculares"          # None usa la salida por defecto
+# NOTA: en esta maquina Windows no tiene microfono predeterminado. Jarvis usa
+# el primero que encuentre (el conector Realtek por WDM-KS) y lo avisa en el
+# registro. Para elegir otro, pon aqui parte de su nombre.
 sample_rate = 16000
+frame_ms = 32                 # 512 muestras: el bloque de Silero, ~30 Hz de nivel
 ring_buffer_seconds = 3.0
+models_dir = "models"         # bajalos con: python scripts/download_voice_models.py
 
 wake_word = "jarvis"
+wake_engine = "openwakeword"
+# El catalogo de openWakeWord trae "hey_jarvis", entrenado con voces en ingles:
+# responde a "Jarvis" pronunciado a la inglesa ("DYAR-vis"), no con jota.
+# Un modelo propio se apunta con su ruta: wake_model = "models/jarvis_es.onnx"
+wake_model = "hey_jarvis"
 wake_threshold = 0.5          # subelo si hay falsos positivos, bajalo si no dispara
 wake_cooldown_s = 1.5
 wake_preroll_ms = 500         # audio previo al disparo que se conserva
 
+vad_engine = "silero"         # silero | energy
+vad_threshold = 0.5
+vad_min_speech_ms = 150
 vad_silence_ms = 700          # silencio que marca el fin de una frase
+speech_start_timeout_s = 5.0  # "Jarvis" y silencio: se cierra con texto vacio
 max_listen_s = 30.0
+publish_idle_level = false    # sin palabra clave no sale nada, ni el nivel
 
 stt_engine = "local"
-# ESTA MAQUINA NO TIENE GPU DEDICADA (Intel UHD 630, 16GB RAM).
-# 'small' es lo que corre en CPU con latencia tolerable. Con GPU dedicada,
-# subir a "large-v3-turbo". Ver la nota de hardware en ESTADO.md.
-stt_model = "small"
+# ESTA MAQUINA NO TIENE GPU DEDICADA (i5-10500, Intel UHD 630, 16GB RAM).
+# Medido con scripts/voice_bench.py: small ~2.5 s por frase, base ~0.85 s,
+# tiny ~0.4 s pero con errores. Con GPU dedicada, subir a "large-v3-turbo".
+stt_model = "base"
+stt_device = "cpu"
+stt_compute_type = "int8"
+stt_beam_size = 1
+# "auto" triplica la latencia en CPU: detectar el idioma cuesta otra pasada.
+stt_language = "es"
+stt_prompt = "Jarvis, sube el volumen. Baja el brillo. Abre el navegador. Pon musica en Spotify."
+# Las parciales compiten por la CPU con la transcripcion final: con base en
+# este procesador retrasarian la final hasta ~0.8 s. Apagadas aqui.
+stt_partials = false
+stt_partial_interval_ms = 700
 
 tts_engine = "local"
 tts_voice = "es_MX-claude-high"
+tts_amplitude_hz = 60
 barge_in_enabled = true
 
 # -----------------------------------------------------------------------------

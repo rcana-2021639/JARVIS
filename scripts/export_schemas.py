@@ -40,6 +40,7 @@ EXPORTED_ENUMS = (
     contract_enums.Emotion,
     contract_enums.PrivacyMode,
     contract_enums.EventType,
+    contract_enums.SpeechEndReason,
 )
 
 

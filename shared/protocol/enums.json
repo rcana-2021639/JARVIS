@@ -81,6 +81,12 @@
       "AMBAR",
       "ROJO",
       "NEGRO"
+    ],
+    "SpeechEndReason": [
+      "SILENCIO",
+      "TOPE",
+      "SIN_HABLA",
+      "CANCELADA"
     ]
   },
   "title": "JarvisEnums"
