@@ -126,6 +126,8 @@ Lo que queda a la vista, sin corregir:
 - ~~`voice/pipeline.py` (Fase 1) tenía 852 líneas~~ — **resuelto**: se partió en `runtime.py` (estado compartido), `listening.py` (captura, palabra clave, VAD), `transcription.py` (Whisper), `speaking.py` (síntesis y barge-in) y `pipeline.py` (la fachada, misma API). El mayor tiene 315 líneas. Verificado sin cambio de comportamiento: las 298 pruebas y `voice_bench.py` con los modelos reales dan lo mismo que en la Fase 1 (6 de 6 palabras clave, WER 0.17, mismas transcripciones).
 - **Dos pruebas de la Fase 0 eran frágiles**: una de redondeo en `test_bus.py` (0.97799… contra 0.978) y la siguiente.
 - **Una prueba de tiempo de la Fase 0 era frágil en Windows** (`test_traced_mide_una_corrutina_y_publica_al_bus`): un `sleep(0.02)` midió 19.7 ms con la CPU ocupada. Se le dio margen (≥ 18 ms).
+- **La prueba de tiempo de MiniLM era frágil en frío** (21 ms en la primera llamada). Ahora calienta el modelo antes de medir.
+- **Palabra clave en español: `wake_engine = "whisper"`** (`voice/spotting.py`). Con los audífonos Bluetooth Crusher Evo, `hey_jarvis` de openWakeWord no pasó de 0.22 con la voz del usuario. En este modo el VAD corta frases mientras Jarvis duerme, Whisper las transcribe en local y solo despierta si la frase empieza con "Jarvis" (o "Yarvis", "Charvis"…). "Jarvis, ¿qué hora es?" de corrido se transcribe una sola vez. Lo que no empieza con la palabra clave no se publica ni se registra. Cuesta ~0.7 s más de CPU por frase. `scripts/mic_check.py` muestra el nivel del micrófono y la puntuación del detector en vivo. Pruebas: `tests/test_voice_spotting.py`.
 
 ### Para la Fase 3 — Sistema de memoria
 

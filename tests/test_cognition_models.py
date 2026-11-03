@@ -47,9 +47,12 @@ needs_ollama = pytest.mark.skipif(not _ollama_ready(), reason="Ollama no esta li
 )
 def test_minilm_entiende_frases_sin_patron(text, intent):
     classifier = build_classifier(lambda: _CONFIG)
+    # La primera llamada carga la sesion de ONNX y llego a medir 21 ms en frio;
+    # la meta de 10 ms es para el uso normal, con el modelo ya caliente.
+    classifier.classify("enciende la luz")
     result = classifier.classify(text)
     assert result.intent.name == intent
-    assert result.elapsed_ms < 15  # meta 10 ms; holgura para la primera llamada en frio
+    assert result.elapsed_ms < 15  # meta 10 ms; holgura para la CPU ocupada
 
 
 @needs_ollama

@@ -111,9 +111,21 @@ class VoiceConfig(_Section):
         ),
     )
     wake_word: str = Field(default="jarvis", min_length=1, description="Palabra de activacion.")
-    wake_engine: Literal["openwakeword", "none"] = Field(
+    wake_engine: Literal["openwakeword", "whisper", "none"] = Field(
         default="openwakeword",
-        description="Detector de palabra clave. 'none' solo para pruebas: nada despierta a Jarvis.",
+        description=(
+            "Detector de palabra clave. 'openwakeword' es liviano pero solo entiende "
+            "'Hey Jarvis' a la inglesa; 'whisper' transcribe cada frase en local y "
+            "entiende 'Jarvis' en espanol (~0.7 s mas). 'none' solo para pruebas."
+        ),
+    )
+    wake_phrase_max_s: float = Field(
+        default=8.0,
+        gt=0.0,
+        description=(
+            "Con wake_engine='whisper': frase mas larga que se transcribe para "
+            "buscar la palabra clave."
+        ),
     )
     wake_model: str = Field(
         default="hey_jarvis",

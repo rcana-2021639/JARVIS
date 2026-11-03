@@ -124,6 +124,14 @@ class Transcriber:
         )
         return "transcrito"
 
+    @traced("voice.wake.stt")
+    async def spot(self, audio: AudioArray, language: Language | None) -> Transcription:
+        """Transcribe una frase para buscar la palabra clave al principio."""
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._rt.engines.stt.transcribe, audio, language=language
+            )
+
     @traced("voice.stt.final")
     async def _run_final(self, listening: Listening) -> Transcription:
         audio = np.concatenate(listening.chunks)

@@ -24,8 +24,10 @@ log_user_content = false
 # VOZ
 # -----------------------------------------------------------------------------
 [voice]
-# input_device = "Microfono (Realtek)"   # None usa el dispositivo por defecto
-# output_device = "Auriculares"          # None usa la salida por defecto
+# Parte del nombre del dispositivo; con varios iguales se prefiere WASAPI.
+# Ver los disponibles: python scripts/voice_live.py --list-devices
+input_device = "Crusher Evo"    # audifonos Bluetooth Skullcandy (manos libres, 16 kHz)
+output_device = "Crusher Evo"
 # NOTA: en esta maquina Windows no tiene microfono predeterminado. Jarvis usa
 # el primero que encuentre (el conector Realtek por WDM-KS) y lo avisa en el
 # registro. Para elegir otro, pon aqui parte de su nombre.
@@ -35,7 +37,11 @@ ring_buffer_seconds = 3.0
 models_dir = "models"         # bajalos con: python scripts/download_voice_models.py
 
 wake_word = "jarvis"
-wake_engine = "openwakeword"
+# "whisper" transcribe cada frase en local y entiende "Jarvis" en espanol.
+# Medido con la voz del usuario: openWakeWord ("hey_jarvis", entrenado en
+# ingles) no paso de 0.22 con umbral 0.5. "openwakeword" es mas liviano.
+wake_engine = "whisper"
+wake_phrase_max_s = 8.0       # frases mas largas se cortan aqui
 # El catalogo de openWakeWord trae "hey_jarvis", entrenado con voces en ingles:
 # responde a "Jarvis" pronunciado a la inglesa ("DYAR-vis"), no con jota.
 # Un modelo propio se apunta con su ruta: wake_model = "models/jarvis_es.onnx"

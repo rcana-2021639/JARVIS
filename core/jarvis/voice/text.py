@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-__all__ = ["normalize", "strip_wake_word"]
+__all__ = ["normalize", "split_wake_word", "strip_wake_word"]
 
 #: Saludos que suelen ir delante de la palabra clave.
 _GREETINGS = frozenset({"hey", "oye", "oiga", "ey", "hola", "ok", "okay", "eh"})
@@ -54,28 +54,34 @@ def _sounds_like(word: str, wake_word: str) -> bool:
     return abs(len(word) - len(wake_word)) <= tolerance and _distance(word, wake_word) <= tolerance
 
 
-def strip_wake_word(text: str, wake_word: str) -> str:
-    """Quita la palabra clave (y un saludo delante) del principio del texto.
+def split_wake_word(text: str, wake_word: str) -> str | None:
+    """Si la frase empieza con la palabra clave, devuelve lo que sigue; si no, None.
 
-    Solo actua al principio: "dile a Jarvis que..." no se toca. Si la frase era
-    solo la palabra clave, devuelve cadena vacia, que el pipeline trata como
-    "dijo Jarvis y se quedo callado".
+    Solo mira el principio: "dile a Jarvis que..." no cuenta. Un saludo delante
+    ("Hey Jarvis", "Oye Jarvis") si. Si la frase era solo la palabra clave,
+    devuelve cadena vacia.
     """
     target = normalize(wake_word.strip())
     if not target:
-        return text.strip()
-
-    position = 0
+        return None
     words = list(_WORD.finditer(text))
     index = 0
     if index < len(words) and normalize(words[index].group()) in _GREETINGS:
         index += 1
-    if index < len(words) and _sounds_like(normalize(words[index].group()), target):
-        position = words[index].end()
-    else:
-        return text.strip()
-
+    if index >= len(words) or not _sounds_like(normalize(words[index].group()), target):
+        return None
     # Se come la puntuacion que separa la palabra clave de la orden, pero no la
     # de apertura: el "¿" de "Jarvis, ¿que hora es?" es parte de la pregunta.
-    remainder = text[position:]
+    remainder = text[words[index].end() :]
     return remainder.lstrip(" \t\n,.;:!?-").strip()
+
+
+def strip_wake_word(text: str, wake_word: str) -> str:
+    """Quita la palabra clave (y un saludo delante) del principio del texto.
+
+    Si no esta, devuelve el texto tal cual. Si la frase era solo la palabra
+    clave, devuelve cadena vacia, que el pipeline trata como "dijo Jarvis y se
+    quedo callado".
+    """
+    remainder = split_wake_word(text, wake_word)
+    return text.strip() if remainder is None else remainder

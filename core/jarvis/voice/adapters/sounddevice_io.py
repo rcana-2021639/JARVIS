@@ -93,9 +93,16 @@ def resolve_device(name: str | None, *, kind: str) -> int:
 
     if name:
         wanted = name.lower()
-        for index, device in candidates:
-            if wanted in device["name"].lower():
-                return index
+        matches = [(i, d) for i, d in candidates if wanted in d["name"].lower()]
+        if matches:
+            # El mismo aparato aparece una vez por API de audio. DECISION: se
+            # prefiere WASAPI porque entrega la frecuencia nativa (16 kHz en los
+            # auriculares Bluetooth) sin el remuestreo ni el bufer extra de MME.
+            hostapis = sd.query_hostapis()
+            for index, device in matches:
+                if "WASAPI" in hostapis[device["hostapi"]]["name"]:
+                    return index
+            return matches[0][0]
         msg = (
             f"No hay dispositivo de {kind} que contenga '{name}'. "
             f"Disponibles:\n{describe_devices()}"

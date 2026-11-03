@@ -31,8 +31,11 @@ from jarvis.logging import (
     get_logger,
     set_correlation_id,
     traced,
+    user_text,
 )
 from jarvis.voice.audio import RingBuffer, frame_level
+from jarvis.voice.spotting import PhraseSegmenter
+from jarvis.voice.text import split_wake_word
 from jarvis.voice.transcription import Listening, Transcriber
 from jarvis.voice.vad import EndpointDetector, EndpointEvent
 
@@ -66,6 +69,7 @@ class VoiceListener:
         """Escuchas ya cerradas cuya transcripcion final sigue en curso."""
         self._correlation_token: contextvars.Token[CorrelationId | None] | None = None
         self._stt = Transcriber(runtime)
+        self._segmenter = PhraseSegmenter(cfg)
         self.source_finished = asyncio.Event()
         """Se activa cuando la fuente de audio se agota (fuentes finitas, pruebas)."""
         runtime.busy_checks.append(self.busy)
@@ -134,6 +138,9 @@ class VoiceListener:
         # para que un segundo "Jarvis" inmediato no se pierda.
         if rt.state is CoreState.HABLANDO and not cfg.barge_in_enabled:
             return
+        if cfg.wake_engine == "whisper":
+            await self._spot_frame(frame, cfg)
+            return
 
         score = await self._score_wake(frame)
         if cfg.publish_idle_level and rt.state is CoreState.DORMIDO:
@@ -152,8 +159,52 @@ class VoiceListener:
     async def _speech_probability(self, frame: AudioArray) -> float:
         return await asyncio.to_thread(self._rt.engines.vad.probability, frame)
 
-    async def _on_wake(self, score: float, cfg: VoiceConfig) -> None:
-        """La palabra clave se disparo: empieza una interaccion."""
+    async def _spot_frame(self, frame: AudioArray, cfg: VoiceConfig) -> None:
+        """Modo whisper: corta frases con el VAD y manda cada una a revisar."""
+        probability = await self._speech_probability(frame)
+        phrase = self._segmenter.feed(frame, probability, self._ring)
+        if phrase is not None:
+            # En otra tarea: el microfono no se detiene mientras Whisper piensa.
+            self._rt.spawn(self._check_phrase(phrase, cfg))
+
+    async def _check_phrase(self, phrase: AudioArray, cfg: VoiceConfig) -> None:
+        """Transcribe una frase; si empieza con la palabra clave, la atiende."""
+        language = None if cfg.stt_language == "auto" else Language(cfg.stt_language)
+        try:
+            result = await self._stt.spot(phrase, language)
+        except Exception as error:
+            _log.exception("voice.spot_failed")
+            await self._rt.report_error("voice.wake", error)
+            return
+        command = split_wake_word(result.text, cfg.wake_word)
+        if command is None:
+            # Sin palabra clave no ocurre nada: ni evento, ni texto en el registro.
+            _log.debug("voice.phrase_ignored", text=user_text(result.text))
+            return
+        if self._listening is not None:
+            return
+        listening = await self._on_wake(1.0, cfg, bind_context=False)
+        if not command:
+            return  # solo "Jarvis": la escucha queda abierta esperando la orden
+        # "Jarvis, que hora es" de corrido: esta misma transcripcion es la final.
+        listening.chunks = [phrase]
+        listening.language = result.language
+        listening.finalizing = True
+        self._listening = None
+        self._pending.add(listening)
+        await self._stt.publish(
+            listening, text=command, confidence=result.confidence, language=result.language
+        )
+        await self._close_listening(listening, "transcrito")
+
+    async def _on_wake(
+        self, score: float, cfg: VoiceConfig, *, bind_context: bool = True
+    ) -> Listening:
+        """La palabra clave se disparo: empieza una interaccion.
+
+        `bind_context=False` cuando lo llama una tarea aparte (modo whisper): el
+        token del id de correlacion solo vale en el contexto del bucle de captura.
+        """
         rt = self._rt
         barge_in = self._speaker.is_speaking
         if barge_in:
@@ -161,13 +212,15 @@ class VoiceListener:
         self._speaker.supersede()
 
         correlation_id = new_correlation_id()
-        if self._correlation_token is not None:
-            clear_correlation_id(self._correlation_token)
-        self._correlation_token = set_correlation_id(correlation_id)
+        if bind_context:
+            if self._correlation_token is not None:
+                clear_correlation_id(self._correlation_token)
+            self._correlation_token = set_correlation_id(correlation_id)
 
         self._last_wake_ms = self._audio_ms
         rt.engines.wake.reset()
         rt.engines.vad.reset()
+        self._segmenter.reset(cfg)
         preroll = self._ring.last(cfg.wake_preroll_ms)
         preroll_ms = preroll.shape[0] / rt.sample_rate * 1000.0
 
@@ -177,7 +230,7 @@ class VoiceListener:
         await rt.emit(
             EventType.VOICE_WAKE_DETECTED,
             WakeDetection(
-                keyword=rt.engines.wake.keyword,
+                keyword=cfg.wake_word if cfg.wake_engine == "whisper" else rt.engines.wake.keyword,
                 score=min(max(score, 0.0), 1.0),
                 preroll_ms=round(preroll_ms),
                 barge_in=barge_in,
@@ -188,7 +241,7 @@ class VoiceListener:
         )
         _log.info("voice.wake", score=round(score, 3), barge_in=barge_in)
 
-        self._listening = Listening(
+        listening = Listening(
             correlation_id=correlation_id,
             endpoint=EndpointDetector(
                 threshold=cfg.vad_threshold,
@@ -201,7 +254,9 @@ class VoiceListener:
             chunks=[preroll],
             language=None if cfg.stt_language == "auto" else Language(cfg.stt_language),
         )
+        self._listening = listening
         await rt.set_state(CoreState.ESCUCHANDO, "wake")
+        return listening
 
     # ------------------------------------------------------------------
     # Escucha

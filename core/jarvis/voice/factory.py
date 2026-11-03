@@ -52,7 +52,9 @@ class NeverWake:
 
 def build_wake(config: VoiceConfig, root: Path | None = None) -> WakeWordDetector:
     """El detector de palabra clave configurado."""
-    if config.wake_engine == "none":
+    if config.wake_engine in {"none", "whisper"}:
+        # Con "whisper" la palabra clave la busca el pipeline en la
+        # transcripcion de cada frase (`voice.spotting`): no hay modelo aparte.
         return NeverWake()
     from jarvis.voice.adapters.openwakeword_wake import OpenWakeWordDetector
 
